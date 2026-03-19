@@ -5,14 +5,26 @@ stages:
     deps:
     - path: src/01_data_ingestion.py
       hash: md5
-      md5: 5e5f8f53bd93007bcc2f05ad8545ab51
-      size: 6241
+      md5: bed7e3385a133d0dc633321da64f3e91
+      size: 6287
+    outs:
+    - path: data/merge_df.csv
+      hash: md5
+      md5: cacb62bca6d7e973fac02abc6351dc51
+      size: 638907976
+  preprocess:
+    cmd: python src/02_preprocessing.py
+    deps:
+    - path: data/merge_df.csv
+      hash: md5
+      md5: cacb62bca6d7e973fac02abc6351dc51
+      size: 638907976
+    - path: src/02_preprocessing.py
+      hash: md5
+      md5: 957f2fb3d2f642f9e8eb9e8b8bf3fabc
+      size: 7071
     outs:
     - path: data/clean_merge_df.parquet
       hash: md5
-      md5: e67c1cda806431f470d5d0701e53779f
-      size: 235997412
-    - path: data/cleaned_cf_dataset.parquet
-      hash: md5
-      md5: f496720dc5ba30b40313fb0b1f5e5fdd
-      size: 2618903
+      md5: d55492f53aa02be500089fb43efd5ba8
+      size: 444822529
