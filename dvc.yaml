@@ -1,0 +1,8 @@
+stages:
+  ingest:
+    cmd: python src/01_data_ingestion.py
+    deps:
+    - src/01_data_ingestion.py
+    outs:
+    - data/clean_merge_df.parquet
+    - data/cleaned_cf_dataset.parquet

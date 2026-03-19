@@ -2,7 +2,7 @@ import os
 import torch
 
 # =========================
-# BASE DIR (NOW CORRECT)
+# BASE DIR
 # =========================
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -25,6 +25,8 @@ EMBEDDINGS_DIR  = os.path.join(BASE_DIR, "embeddings")
 MODELS_DIR      = os.path.join(BASE_DIR, "models")
 OUTPUTS_DIR     = os.path.join(BASE_DIR, "outputs")
 MLFLOW_DIR      = os.path.join(BASE_DIR, "mlflow")
+SRC_DIR         = os.path.join(BASE_DIR, "src")
+API_DIR         = os.path.join(BASE_DIR, "api")
 
 # -------------------------
 # DATA FILES
@@ -66,13 +68,13 @@ AB_RESULTS_PATH     = os.path.join(OUTPUTS_DIR, "ab_comparison_results.csv")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # =========================
-# MLflow
+# MLflow CONFIG
 # =========================
-MLFLOW_TRACKING_URI = os.path.join(BASE_DIR, "mlflow")
+MLFLOW_TRACKING_URI = "file:./mlflow"
 MLFLOW_EXPERIMENT   = "DS11"
 
 # =========================
-# HUGGINGFACE
+# HUGGINGFACE CONFIG
 # =========================
 HF_DATASET_NAME = "McAuley-Lab/Amazon-Reviews-2023"
 
@@ -81,7 +83,54 @@ HF_DATASET_NAME = "McAuley-Lab/Amazon-Reviews-2023"
 # =========================
 RANDOM_STATE = 42
 
+
+# =========================
+# CREATE DIRS (STANDARDIZED)
+# =========================
+def create_dirs():
+    dirs = [
+        DATA_DIR,
+        EMBEDDINGS_DIR,
+        MODELS_DIR,
+        OUTPUTS_DIR,
+        MLFLOW_DIR,
+        SRC_DIR,
+        API_DIR,
+    ]
+    for d in dirs:
+        os.makedirs(d, exist_ok=True)
+
+
+# =========================
+# MLflow SETUP
+# =========================
 def setup_mlflow():
     import mlflow
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
+
+
+# =========================
+# SEED CONTROL (VERY IMPORTANT)
+# =========================
+def set_seed():
+    import random
+    import numpy as np
+    import torch
+
+    random.seed(RANDOM_STATE)
+    np.random.seed(RANDOM_STATE)
+    torch.manual_seed(RANDOM_STATE)
+
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(RANDOM_STATE)
+
+
+# =========================
+# OPTIONAL ENTRY POINT
+# =========================
+if __name__ == "__main__":
+    create_dirs()
+    setup_mlflow()
+    set_seed()
+    print("✅ Config initialized successfully.")

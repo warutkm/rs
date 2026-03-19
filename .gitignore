@@ -31,3 +31,7 @@ Thumbs.db
 *.log
 
 .vscode/
+
+dvc_storage/
+data/*.parquet
+data/*.jsonl

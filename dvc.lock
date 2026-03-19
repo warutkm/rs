@@ -1,0 +1,18 @@
+schema: '2.0'
+stages:
+  ingest:
+    cmd: python src/01_data_ingestion.py
+    deps:
+    - path: src/01_data_ingestion.py
+      hash: md5
+      md5: 5e5f8f53bd93007bcc2f05ad8545ab51
+      size: 6241
+    outs:
+    - path: data/clean_merge_df.parquet
+      hash: md5
+      md5: e67c1cda806431f470d5d0701e53779f
+      size: 235997412
+    - path: data/cleaned_cf_dataset.parquet
+      hash: md5
+      md5: f496720dc5ba30b40313fb0b1f5e5fdd
+      size: 2618903
