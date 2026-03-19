@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment
+env/
+venv/
+rs_env/
+.conda/
+
+# Data (handled by DVC)
+data/
+embeddings/
+models/
+
+# MLflow
+mlflow/
+
+# Outputs
+outputs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Logs
+*.log
