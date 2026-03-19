@@ -80,3 +80,8 @@ HF_DATASET_NAME = "McAuley-Lab/Amazon-Reviews-2023"
 # REPRODUCIBILITY
 # =========================
 RANDOM_STATE = 42
+
+def setup_mlflow():
+    import mlflow
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    mlflow.set_experiment(MLFLOW_EXPERIMENT)
