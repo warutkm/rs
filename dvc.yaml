@@ -4,5 +4,11 @@ stages:
     deps:
     - src/01_data_ingestion.py
     outs:
+    - data/merge_df.csv
+  preprocess:
+    cmd: python src/02_preprocessing.py
+    deps:
+    - data/merge_df.csv
+    - src/02_preprocessing.py
+    outs:
     - data/clean_merge_df.parquet
-    - data/cleaned_cf_dataset.parquet

@@ -92,6 +92,11 @@ def load_category_data(category):
 # =========================
 def main():
     create_dirs()
+    
+    if os.path.exists(MERGE_CSV_PATH):
+        print("Skipping ingestion...")
+        return
+    
     setup_mlflow()
 
     with mlflow.start_run(run_name="phase1_data_ingestion"):
@@ -179,7 +184,6 @@ def main():
         # Save
         print("\n[1.9] Saving...")
         merge_df.to_csv(MERGE_CSV_PATH, index=False)
-        merge_df.to_parquet(CLEAN_PARQUET_PATH, index=False)
 
         merge_df[["user_id", "item_id", "rating", "timestamp"]].to_parquet(
             CF_DATA_PATH, index=False
