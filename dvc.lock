@@ -64,3 +64,55 @@ stages:
       hash: md5
       md5: aa53a1d0a663ace9689e19c756d4f3f0
       size: 344050
+  content_cf:
+    cmd: python src/05_content_cf_recommender.py
+    deps:
+    - path: data/clean_merge_df.parquet
+      hash: md5
+      md5: d55492f53aa02be500089fb43efd5ba8
+      size: 444822529
+    - path: src/05_content_cf_recommender.py
+      hash: md5
+      md5: 44bf1b78fc39712f2fa3363d95e7a6d2
+      size: 12269
+  mf_ncf:
+    cmd: python src/06_mf_ncf_pytorch.py
+    deps:
+    - path: data/clean_merge_df.parquet
+      hash: md5
+      md5: d55492f53aa02be500089fb43efd5ba8
+      size: 444822529
+    - path: src/06_mf_ncf_pytorch.py
+      hash: md5
+      md5: 0c2aa42e54bad4101224a4240f8ab981
+      size: 10263
+    outs:
+    - path: models/metrics.json
+      hash: md5
+      md5: edcdb40acfc5747c9eac33bfc5fe8f2c
+      size: 283
+    - path: models/mf_model.pth
+      hash: md5
+      md5: d3bc1e2a1e629d866753466f735c9257
+      size: 14788312
+    - path: models/ncf_model.pth
+      hash: md5
+      md5: c07a74986359d58eaeabdb9bee1c5f26
+      size: 29163156
+  embed:
+    cmd: python src/07_semantic_search.py
+    deps:
+    - path: data/clean_merge_df.parquet
+      hash: md5
+      md5: d55492f53aa02be500089fb43efd5ba8
+      size: 444822529
+    - path: src/07_semantic_search.py
+      hash: md5
+      md5: 8311c23ab5459983a330a64f59e40ef8
+      size: 28240
+    outs:
+    - path: embeddings/
+      hash: md5
+      md5: 2342d19661091e02cc4a514fc42263ac.dir
+      size: 842732188
+      nfiles: 7

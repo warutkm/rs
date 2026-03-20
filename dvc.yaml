@@ -41,3 +41,10 @@ stages:
     - models/metrics.json
     - models/mf_model.pth
     - models/ncf_model.pth
+  embed:
+    cmd: python src/07_semantic_search.py
+    deps:
+    - data/clean_merge_df.parquet
+    - src/07_semantic_search.py
+    outs:
+    - embeddings/
