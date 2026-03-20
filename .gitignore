@@ -18,7 +18,8 @@ models/
 mlflow/
 
 # Outputs
-outputs/
+outputs/*.csv
+mlflow/mlruns/
 
 # OS
 .DS_Store
