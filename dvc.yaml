@@ -12,3 +12,10 @@ stages:
     - src/02_preprocessing.py
     outs:
     - data/clean_merge_df.parquet
+  summarize:
+    cmd: python src/03_b_t5_summarization.py
+    deps:
+    - data/clean_merge_df.parquet
+    - src/03_b_t5_summarization.py
+    outs:
+    - outputs/final_top500_product_summary.csv
