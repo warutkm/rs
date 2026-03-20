@@ -1,38 +1,74 @@
-# Python
+# =========================
+# PYTHON
+# =========================
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
-# Environment
+# =========================
+# ENVIRONMENTS
+# =========================
 env/
 venv/
 rs_env/
 .conda/
+.venv/
 
-# Data (handled by DVC)
-data/
-embeddings/
-models/
+# =========================
+# DATA (DVC TRACKED)
+# =========================
+data/*
+!data/*.dvc
 
-# MLflow
-mlflow/
+# =========================
+# EMBEDDINGS (DVC TRACKED)
+# =========================
+embeddings/*
+!embeddings/*.dvc
 
-# Outputs
-outputs/*.csv
-mlflow/mlruns/
+# =========================
+# MODELS (DVC TRACKED)
+# =========================
+models/*
+!models/*.dvc
 
-# OS
+# =========================
+# MLFLOW
+# =========================
+mlflow/*
+!mlflow/.gitkeep
+
+# =========================
+# OUTPUTS
+# =========================
+outputs/*
+!outputs/.gitkeep
+
+# =========================
+# LOGS
+# =========================
+*.log
+
+# =========================
+# JUPYTER
+# =========================
+.ipynb_checkpoints/
+
+# =========================
+# OS FILES
+# =========================
 .DS_Store
 Thumbs.db
 
-# Jupyter
-.ipynb_checkpoints/
-
-# Logs
-*.log
-
+# =========================
+# EDITOR
+# =========================
 .vscode/
+.idea/
 
+# =========================
+# DVC CACHE (OPTIONAL LOCAL)
+# =========================
+.dvc/cache/
 dvc_storage/
-data/*.parquet
-data/*.jsonl
