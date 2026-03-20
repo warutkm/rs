@@ -32,3 +32,12 @@ stages:
     deps:
     - data/clean_merge_df.parquet
     - src/05_content_cf_recommender.py
+  mf_ncf:
+    cmd: python src/06_mf_ncf_pytorch.py
+    deps:
+    - data/clean_merge_df.parquet
+    - src/06_mf_ncf_pytorch.py
+    outs:
+    - models/metrics.json
+    - models/mf_model.pth
+    - models/ncf_model.pth
