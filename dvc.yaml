@@ -27,3 +27,8 @@ stages:
     outs:
     - models/apriori_recommender.pkl
     - outputs/apriori_rules.csv
+  content_cf:
+    cmd: python src/05_content_cf_recommender.py
+    deps:
+    - data/clean_merge_df.parquet
+    - src/05_content_cf_recommender.py
