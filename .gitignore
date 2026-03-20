@@ -72,3 +72,5 @@ Thumbs.db
 # =========================
 .dvc/cache/
 dvc_storage/
+
+mlflow.db
