@@ -19,3 +19,11 @@ stages:
     - src/03_b_t5_summarization.py
     outs:
     - outputs/final_top500_product_summary.csv
+  apriori:
+    cmd: python src/04_apriori_recommender.py
+    deps:
+    - data/clean_merge_df.parquet
+    - src/04_apriori_recommender.py
+    outs:
+    - models/apriori_recommender.pkl
+    - outputs/apriori_rules.csv

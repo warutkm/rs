@@ -28,3 +28,39 @@ stages:
       hash: md5
       md5: d55492f53aa02be500089fb43efd5ba8
       size: 444822529
+  summarize:
+    cmd: python src/03_b_t5_summarization.py
+    deps:
+    - path: data/clean_merge_df.parquet
+      hash: md5
+      md5: d55492f53aa02be500089fb43efd5ba8
+      size: 444822529
+    - path: src/03_b_t5_summarization.py
+      hash: md5
+      md5: eeb99b19ab49f7905c522deccb2c49ad
+      size: 7721
+    outs:
+    - path: outputs/final_top500_product_summary.csv
+      hash: md5
+      md5: cba7fabb7ebe85b171b5cdb1dc764873
+      size: 193466
+  apriori:
+    cmd: python src/04_apriori_recommender.py
+    deps:
+    - path: data/clean_merge_df.parquet
+      hash: md5
+      md5: d55492f53aa02be500089fb43efd5ba8
+      size: 444822529
+    - path: src/04_apriori_recommender.py
+      hash: md5
+      md5: 543b200df23a950bd38c3004e752802d
+      size: 13407
+    outs:
+    - path: models/apriori_recommender.pkl
+      hash: md5
+      md5: 9c3243820d84a4ef5711bf48349a6a72
+      size: 3982224
+    - path: outputs/apriori_rules.csv
+      hash: md5
+      md5: aa53a1d0a663ace9689e19c756d4f3f0
+      size: 344050
