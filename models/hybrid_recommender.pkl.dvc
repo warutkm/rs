@@ -1,0 +1,5 @@
+outs:
+- md5: 8b8e50e1b85efbfab1f1af8ca95a53dc
+  size: 314800509
+  hash: md5
+  path: hybrid_recommender.pkl
