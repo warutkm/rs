@@ -1,5 +1,0 @@
-outs:
-- md5: d864505ce034ed5c6cb9f2baf2a4ed86
-  size: 40870735
-  hash: md5
-  path: svdpp_model.pkl

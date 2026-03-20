@@ -116,3 +116,67 @@ stages:
       md5: 2342d19661091e02cc4a514fc42263ac.dir
       size: 842732188
       nfiles: 7
+  als_svdpp:
+    cmd: python src/09_als_svdpp.py
+    deps:
+    - path: data/cleaned_cf_dataset.parquet
+      hash: md5
+      md5: 07a6f655b16d07dbbf7098e2e676aca6
+      size: 2618745
+    - path: data/item_map.json
+      hash: md5
+      md5: a34fa8d246d74f864579e2637a0095b3
+      size: 919211
+    - path: data/user_map.json
+      hash: md5
+      md5: 046c1f91e75e8a39a17b3744bf399df0
+      size: 479081
+    - path: src/09_als_svdpp.py
+      hash: md5
+      md5: 0a88b31d43b13826d0aae65bfb3f9eda
+      size: 9163
+    outs:
+    - path: models/als_model.npz
+      hash: md5
+      md5: cccc115c178e10a4f32281b98abd9734
+      size: 14561835
+    - path: models/svdpp_model.pkl
+      hash: md5
+      md5: 99fc49d5a23fa9950ff802ba89a86265
+      size: 40870735
+  hybrid:
+    cmd: python src/08_hybrid_engine.py
+    deps:
+    - path: embeddings/meta_embeds.npy
+      hash: md5
+      md5: 059af84c72de7aeb9401c48e5904fc49
+      size: 136092800
+    - path: embeddings/review_embeds.npy
+      hash: md5
+      md5: 0cf519dc6b015b483969991a4661e477
+      size: 431855744
+    - path: models/als_model.npz
+      hash: md5
+      md5: cccc115c178e10a4f32281b98abd9734
+      size: 14561835
+    - path: models/mf_model.pth
+      hash: md5
+      md5: 48275fa92065fbfe2ecba78c3db8ce4d
+      size: 14788312
+    - path: models/ncf_model.pth
+      hash: md5
+      md5: 08b64493dc2271814ca4935bdc047217
+      size: 29163156
+    - path: models/svdpp_model.pkl
+      hash: md5
+      md5: 99fc49d5a23fa9950ff802ba89a86265
+      size: 40870735
+    - path: src/08_hybrid_engine.py
+      hash: md5
+      md5: 63ca36bc868f33ba303e54532964b7e8
+      size: 27445
+    outs:
+    - path: models/hybrid_recommender.pkl
+      hash: md5
+      md5: 13b2328832f0964cc0eeec18cca306e7
+      size: 314800509

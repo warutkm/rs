@@ -48,3 +48,25 @@ stages:
     - src/07_semantic_search.py
     outs:
     - embeddings/
+  als_svdpp:
+    cmd: python src/09_als_svdpp.py
+    deps:
+    - data/cleaned_cf_dataset.parquet
+    - data/item_map.json
+    - data/user_map.json
+    - src/09_als_svdpp.py
+    outs:
+    - models/als_model.npz
+    - models/svdpp_model.pkl
+  hybrid:
+    cmd: python src/08_hybrid_engine.py
+    deps:
+    - embeddings/meta_embeds.npy
+    - embeddings/review_embeds.npy
+    - models/als_model.npz
+    - models/mf_model.pth
+    - models/ncf_model.pth
+    - models/svdpp_model.pkl
+    - src/08_hybrid_engine.py
+    outs:
+    - models/hybrid_recommender.pkl
