@@ -1,5 +1,5 @@
 outs:
-- md5: 6bc5c9d3682fbfd489ddd63f9634dda9
-  size: 724562
+- md5: 04495729d7ecf963ddcc1895e64777b0
+  size: 725485
   hash: md5
   path: test_df.parquet
