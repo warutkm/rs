@@ -44,6 +44,11 @@ mlflow/*
 # =========================
 outputs/*
 !outputs/.gitkeep
+outputs/*
+!outputs/apriori_rules.csv
+!outputs/ab_comparison_results.csv
+!outputs/cold_start_delta.csv
+!outputs/ab_comparison_chart.png
 
 # =========================
 # LOGS
