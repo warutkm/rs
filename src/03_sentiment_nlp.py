@@ -287,7 +287,7 @@ del text_clean_series, wc_text, text
 # =============================================================================
 # DONE
 # =============================================================================
-print("\n✓ Phase 3A complete. Run 03b_t5_summarization.py next.")
+print("\n✓ Phase 3A complete. Run 03_b_t5_summarization.py next.")
 print("  outputs/classification_report.txt")
 print("  outputs/confusion_matrix.png")
 print("  outputs/sentiment_bar.png")
