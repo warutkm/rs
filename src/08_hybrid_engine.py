@@ -21,7 +21,7 @@ BASE_DIR = os.path.dirname(SRC_DIR) if os.path.basename(SRC_DIR) == "src" else S
 DATA_DIR   = os.path.join(BASE_DIR, "data")
 MODELS_DIR = os.path.join(BASE_DIR, "models")
 EMBED_DIR  = os.path.join(BASE_DIR, "embeddings")
-MLFLOW_URI = "file:///" + os.path.join(BASE_DIR, "mlflow").replace("\\", "/")
+MLFLOW_URI = "mlflow/"
 
 CLEAN_PARQUET    = os.path.join(DATA_DIR,   "clean_merge_df.parquet")
 TEST_PARQUET     = os.path.join(DATA_DIR,   "test_df.parquet")
@@ -44,7 +44,7 @@ _mod05 = importlib.import_module("05_content_cf_recommender")
 ProductRecommender                = _mod05.ProductRecommender
 CollaborativeFilteringRecommender = _mod05.CollaborativeFilteringRecommender
 
-mlflow.set_tracking_uri(MLFLOW_URI)
+mlflow.set_tracking_uri("mlflow/")
 mlflow.set_experiment("DS11")
 
 
@@ -432,19 +432,6 @@ def evaluate_hybrid(
 # 8.5 + 8.6
 # =============================================================================
 
-def log_hybrid_mlflow(hybrid, metrics):
-    with mlflow.start_run(run_name="Hybrid"):
-        mlflow.log_param("cf_weight",         hybrid.cf_weight)
-        mlflow.log_param("content_weight",    hybrid.content_weight)
-        mlflow.log_param("apriori_weight",    hybrid.apriori_weight)
-        mlflow.log_param("top_k_per_engine",  hybrid.top_k)
-        mlflow.log_param("new_item_threshold", hybrid.new_item_threshold)
-        for name, val in metrics.items():
-            mlflow.log_metric(name, val)
-        mlflow.log_artifact(HYBRID_PKL)
-    print(f"[MLflow] Hybrid run logged → {metrics}")
-
-
 def save_hybrid(hybrid, path=HYBRID_PKL):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
@@ -455,6 +442,19 @@ def save_hybrid(hybrid, path=HYBRID_PKL):
 def load_hybrid(path=HYBRID_PKL):
     with open(path, "rb") as f:
         return dill.load(f)
+
+
+def log_hybrid_mlflow(hybrid, metrics):
+    save_hybrid(hybrid, HYBRID_PKL)            # ← save_hybrid now defined above
+    with mlflow.start_run(run_name="Hybrid"):
+        mlflow.log_param("cf_weight",          hybrid.cf_weight)
+        mlflow.log_param("content_weight",     hybrid.content_weight)
+        mlflow.log_param("apriori_weight",     hybrid.apriori_weight)
+        mlflow.log_param("top_k_per_engine",   hybrid.top_k)
+        mlflow.log_param("new_item_threshold", hybrid.new_item_threshold)
+        for name, val in metrics.items():
+            mlflow.log_metric(name, val)
+        mlflow.log_artifact(HYBRID_PKL)
 
 
 # =============================================================================
@@ -587,7 +587,6 @@ def main():
 
     print(f"  Metrics: {metrics}")
 
-    save_hybrid(hybrid, HYBRID_PKL)
     log_hybrid_mlflow(hybrid, metrics)
 
     print(f"\n{'=' * 60}")
