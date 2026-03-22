@@ -1,0 +1,6 @@
+system,warm_recall@10,cold_recall@10,delta_recall@10,warm_precision@10,cold_precision@10,delta_precision@10,warm_ndcg@10,cold_ndcg@10,delta_ndcg@10
+content,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+als,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+mf,0.01,0.0,-0.01,0.001,0.0,-0.001,0.0039,0.0,-0.0039
+ncf,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+hybrid,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
