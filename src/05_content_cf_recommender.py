@@ -159,7 +159,30 @@ class ProductRecommender:
     }
 
     def __init__(self, agg_df: pd.DataFrame):
-        self.df = agg_df.set_index("item_id").copy()
+        self.df           = agg_df.set_index("item_id").copy()
+        self.user_history = {}   # populated by set_user_history()
+
+    def set_user_history(self, train_df: pd.DataFrame):
+        """
+        Call once after training split is available.
+        Stores last interacted item per user for Phase 10 seed selection.
+        train_df must have columns: user_id, item_id, timestamp
+        """
+        self.user_history = (
+            train_df.sort_values('timestamp')
+            .groupby('user_id')['item_id']
+            .apply(list)
+            .to_dict()
+        )
+        print(f'User history stored for {len(self.user_history)} users.')
+
+    def get_user_seed(self, user_id: str):
+        """
+        Returns last interacted item from training history.
+        Used by Phase 10 evaluator as input seed.
+        """
+        history = self.user_history.get(user_id, [])
+        return history[-1] if history else None
 
     def get_recommendations(
         self,
@@ -171,11 +194,18 @@ class ProductRecommender:
         Returns list[dict] with keys: item_id, score.
         Compatible with Phase 8 HybridRecommender._get_content().
         """
+        if item_id not in self.df.index:
+            return []   # graceful empty instead of KeyError
+
         if weights is None:
             weights = self.DEFAULT_WEIGHTS
 
         df = self.df.copy()
-        df["final_score"] = sum(weights[col] * df[col] for col in weights if col in df.columns)
+        df["final_score"] = sum(
+            weights[col] * df[col]
+            for col in weights
+            if col in df.columns
+        )
 
         recs = (
             df[df.index != item_id]

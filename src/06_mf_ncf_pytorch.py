@@ -105,10 +105,14 @@ class NCF(nn.Module):
 # =========================
 # TRAIN
 # =========================
-def train_model(model, train_loader, epochs):
+def train_model(model, train_loader, epochs, weight_decay=1e-5):
     model.to(DEVICE)
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
-    loss_fn   = nn.MSELoss()
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=LR, weight_decay=weight_decay
+    )
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=5, gamma=0.5
+    )
 
     for epoch in range(epochs):
         model.train()
@@ -116,19 +120,17 @@ def train_model(model, train_loader, epochs):
 
         for u, i, r in train_loader:
             u, i, r = u.to(DEVICE), i.to(DEVICE), r.to(DEVICE)
-
             pred = model(u, i)
-            loss = loss_fn(pred, r)
-
+            loss = nn.MSELoss()(pred, r)
             optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-
             total_loss += loss.item()
 
+        scheduler.step()
         epoch_rmse = np.sqrt(total_loss / len(train_loader))
-        print(f"  Epoch {epoch+1}/{epochs}  RMSE: {epoch_rmse:.4f}")
+        print(f"  Epoch {epoch+1}/{epochs}  RMSE: {epoch_rmse:.4f}  LR: {scheduler.get_last_lr()[0]:.6f}")
 
     return model
 
@@ -160,15 +162,18 @@ def evaluate_rmse(model, df):
 # Fix: test_df may have only 1 item per user (leave-1-out split)
 # Use sampled negative protocol — 1 true item vs 500 negatives
 # =========================
-def evaluate_ranking(model, test_df, n_items, k=10):
+def evaluate_ranking(model, test_df, n_items, k=10, seed_lookup=None):
     model.eval()
     recall_list, ndcg_list = [], []
 
-    # Use user_idx groupby — test_df always has user_idx column
     for user_idx, group in tqdm(
         test_df.groupby("user_idx"), desc="  Ranking eval", leave=False
     ):
         true_items = group["item_idx"].values
+
+        # FIX: skip users with no training seed
+        if seed_lookup and user_idx not in seed_lookup:
+            continue
 
         # Sample 500 negatives not in true_items
         negatives = np.setdiff1d(
@@ -176,27 +181,26 @@ def evaluate_ranking(model, test_df, n_items, k=10):
             true_items
         )[:500]
 
-        # Combine: all true items + 500 negatives
         candidates = np.concatenate([true_items, negatives])
 
         with torch.no_grad():
             u_tensor = torch.tensor(
                 [user_idx] * len(candidates), dtype=torch.long
             ).to(DEVICE)
-            i_tensor = torch.tensor(candidates, dtype=torch.long).to(DEVICE)
-            scores   = model(u_tensor, i_tensor).cpu().numpy()
+            i_tensor = torch.tensor(
+                candidates, dtype=torch.long
+            ).to(DEVICE)
+            scores = model(u_tensor, i_tensor).cpu().numpy()
 
         ranked_indices = np.argsort(-scores)
         ranked_items   = candidates[ranked_indices]
 
-        # Recall@k: any true item in top-k
-        top_k = set(ranked_items[:k].tolist())
         true_set = set(true_items.tolist())
-        hits = len(top_k & true_set)
+        top_k    = set(ranked_items[:k].tolist())
+        hits     = len(top_k & true_set)
 
         recall_list.append(1 if hits > 0 else 0)
 
-        # NDCG@k: position of first true item hit
         ndcg = 0.0
         for rank, item in enumerate(ranked_items[:k]):
             if item in true_set:
@@ -274,12 +278,7 @@ def main():
     df = df[["user_id", "item_id", "rating", "timestamp"]].copy()
     df = df.dropna(subset=["user_id", "item_id", "rating"])
     df["rating"] = df["rating"].astype(np.float32)
-
     print(f"  Total interactions: {len(df)}")
-
-    # Save CF dataset for Phase 9
-    df.to_parquet("data/cleaned_cf_dataset.parquet", index=False)
-    print("  Saved → data/cleaned_cf_dataset.parquet")
 
     # ---- Encode IDs ----
     print("[6.2] Encoding IDs...")
@@ -292,7 +291,6 @@ def main():
     df["user_idx"] = df["user_id"].map(user_map).astype(int)
     df["item_idx"] = df["item_id"].map(item_map).astype(int)
 
-    # Save maps as int values (not str) — Phase 9 requires this
     with open("data/user_map.json", "w") as f:
         json.dump(user_map, f)
     with open("data/item_map.json", "w") as f:
@@ -301,17 +299,26 @@ def main():
     print(f"  Users: {len(user_map)}  Items: {len(item_map)}")
 
     # ---- Train/Test split ----
-    # Leave-1-out: last interaction per user as test (sorted by timestamp)
     print("[6.3] Train/Test split (leave-1-out by timestamp)...")
-    df = df.sort_values("timestamp")
+    df = df.sort_values(["user_idx", "timestamp"])
     test_idx  = df.groupby("user_idx").tail(1).index
     test_df   = df.loc[test_idx].reset_index(drop=True)
     train_df  = df.drop(test_idx).reset_index(drop=True)
 
-    test_df.to_parquet("data/test_df.parquet", index=False)
+    # FIX 1: save train_df — required by Phase 9 and Phase 10
+    train_df.to_parquet("data/train_df.parquet", index=False)
+    test_df.to_parquet("data/test_df.parquet",   index=False)
+
+    # FIX 2: save cleaned_cf_dataset from train only (not full df)
+    train_df[["user_id", "item_id", "rating", "timestamp"]].to_parquet(
+        "data/cleaned_cf_dataset.parquet", index=False
+    )
 
     print(f"  Train: {len(train_df)}  Test: {len(test_df)}")
     print(f"  Test users: {test_df['user_id'].nunique()}")
+    print(f"  Saved → data/train_df.parquet")
+    print(f"  Saved → data/test_df.parquet")
+    print(f"  Saved → data/cleaned_cf_dataset.parquet")
 
     # ---- DataLoader ----
     print("[6.4] Building DataLoader...")
@@ -320,11 +327,20 @@ def main():
         batch_size=BATCH_SIZE,
         shuffle=True,
         pin_memory=(DEVICE.type == "cuda"),
-        num_workers=0   # 0 is safest on Windows
+        num_workers=0
     )
 
     n_users = len(user_map)
     n_items = len(item_map)
+
+    # FIX 3: build seed lookup for ranking eval
+    # seed = last training item per user (second-to-last overall)
+    seed_lookup = (
+        train_df.sort_values(["user_idx", "timestamp"])
+        .groupby("user_idx")["item_idx"]
+        .last()
+        .to_dict()
+    )  # user_idx -> last train item_idx
 
     mlflow.set_tracking_uri("mlflow/")
     mlflow.set_experiment("DS11")
@@ -334,14 +350,25 @@ def main():
     mf_model = MF(n_users, n_items, EMB_DIM)
 
     with mlflow.start_run(run_name="MF"):
-        mf_model  = train_model(mf_model, train_loader, epochs=8)
+        mf_model  = train_model(mf_model, train_loader, epochs=15)
         mf_rmse   = evaluate_rmse(mf_model, test_df)
-        mf_recall, mf_ndcg = evaluate_ranking(mf_model, test_df, n_items)
 
-        print(f"  MF  RMSE: {mf_rmse:.4f}  Recall@10: {mf_recall:.4f}  NDCG@10: {mf_ndcg:.4f}")
+        # FIX 3: pass seed_lookup to evaluate_ranking
+        mf_recall, mf_ndcg = evaluate_ranking(
+            mf_model, test_df, n_items, seed_lookup=seed_lookup
+        )
 
-        mlflow.log_params({"emb_dim": EMB_DIM, "epochs": 8, "lr": LR, "batch_size": BATCH_SIZE})
-        mlflow.log_metrics({"rmse": mf_rmse, "recall_at_10": mf_recall, "ndcg_at_10": mf_ndcg})
+        print(f"  MF  RMSE={mf_rmse:.4f}  Recall@10={mf_recall:.4f}  NDCG@10={mf_ndcg:.4f}")
+
+        mlflow.log_params({
+            "emb_dim": EMB_DIM, "epochs": 8,
+            "lr": LR, "batch_size": BATCH_SIZE
+        })
+        mlflow.log_metrics({
+            "rmse": mf_rmse,
+            "recall_at_10": mf_recall,
+            "ndcg_at_10": mf_ndcg
+        })
 
         torch.save(mf_model.state_dict(), "models/mf_model.pth")
         mlflow.log_artifact("models/mf_model.pth")
@@ -351,14 +378,24 @@ def main():
     ncf_model = NCF(n_users, n_items, EMB_DIM)
 
     with mlflow.start_run(run_name="NCF"):
-        ncf_model  = train_model(ncf_model, train_loader, epochs=10)
+        ncf_model  = train_model(ncf_model, train_loader, epochs=15)
         ncf_rmse   = evaluate_rmse(ncf_model, test_df)
-        ncf_recall, ncf_ndcg = evaluate_ranking(ncf_model, test_df, n_items)
 
-        print(f"  NCF RMSE: {ncf_rmse:.4f}  Recall@10: {ncf_recall:.4f}  NDCG@10: {ncf_ndcg:.4f}")
+        ncf_recall, ncf_ndcg = evaluate_ranking(
+            ncf_model, test_df, n_items, seed_lookup=seed_lookup
+        )
 
-        mlflow.log_params({"emb_dim": EMB_DIM, "epochs": 10, "lr": LR, "batch_size": BATCH_SIZE})
-        mlflow.log_metrics({"rmse": ncf_rmse, "recall_at_10": ncf_recall, "ndcg_at_10": ncf_ndcg})
+        print(f"  NCF RMSE={ncf_rmse:.4f}  Recall@10={ncf_recall:.4f}  NDCG@10={ncf_ndcg:.4f}")
+
+        mlflow.log_params({
+            "emb_dim": EMB_DIM, "epochs": 10,
+            "lr": LR, "batch_size": BATCH_SIZE
+        })
+        mlflow.log_metrics({
+            "rmse": ncf_rmse,
+            "recall_at_10": ncf_recall,
+            "ndcg_at_10": ncf_ndcg
+        })
 
         torch.save(ncf_model.state_dict(), "models/ncf_model.pth")
         mlflow.log_artifact("models/ncf_model.pth")
@@ -366,8 +403,16 @@ def main():
     # ================= SAVE METRICS =================
     print("\nSaving metrics...")
     metrics = {
-        "MF":  {"rmse": float(mf_rmse),  "recall@10": float(mf_recall),  "ndcg@10": float(mf_ndcg)},
-        "NCF": {"rmse": float(ncf_rmse), "recall@10": float(ncf_recall), "ndcg@10": float(ncf_ndcg)}
+        "MF":  {
+            "rmse": float(mf_rmse),
+            "recall@10": float(mf_recall),
+            "ndcg@10": float(mf_ndcg)
+        },
+        "NCF": {
+            "rmse": float(ncf_rmse),
+            "recall@10": float(ncf_recall),
+            "ndcg@10": float(ncf_ndcg)
+        }
     }
 
     with open("models/metrics.json", "w") as f:
@@ -376,9 +421,7 @@ def main():
     print("  Saved → models/metrics.json")
 
     plot_umap_and_metrics(mf_model, ncf_model, metrics)
-
-    print("\nPhase 6 completed successfully.")
-
+    print("\nPhase 6 complete.")
 
 if __name__ == "__main__":
     main()

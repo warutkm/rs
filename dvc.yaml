@@ -26,7 +26,6 @@ stages:
     - src/04_apriori_recommender.py
     outs:
     - models/apriori_recommender.pkl
-    - outputs/apriori_rules.csv
   content_cf:
     cmd: python src/05_content_cf_recommender.py
     deps:

@@ -1,25 +1,6 @@
 """
 Phase 8 — Hybrid Engine + Cold-Start
 File: src/08_hybrid_engine.py
-
-Workflow actions:
-  8.1  HybridRecommender — wraps Apriori + CF + ProductRecommender;
-         union of top-20 from each engine, weighted fusion
-  8.2  Cold-start: new user  — ProductRecommender + semantic search only
-  8.3  Cold-start: new item  — product_text embedding similarity only (< 3 reviews)
-  8.4  final_recommendation(item_id, user_id) — auto-detects cold-start;
-         returns metadata with source tag per result
-  8.5  Log Hybrid run to MLflow — cf_weight, content_weight, apriori_weight,
-         Recall@10, NDCG@10, Precision@10
-  8.6  Serialize with dill — dill.dump(hybrid_recommender, 'models/hybrid_recommender.pkl')
-
-Depends on (all must exist before running):
-  models/apriori_recommender.pkl    <- Phase 4
-  models/product_recommender.pkl   <- Phase 5
-  models/cf_recommender.pkl        <- Phase 5
-  embeddings/product_vecs.npz      <- Phase 7  (keys=['keys','vecs'])
-  data/clean_merge_df.parquet      <- Phase 1/2
-  data/test_df.parquet             <- Phase 6  (for evaluation metrics)
 """
 
 import os
@@ -27,7 +8,8 @@ import json
 import sys
 import numpy as np
 import pandas as pd
-import dill          # used for both loading PKLs and saving hybrid_recommender
+import scipy.sparse as sp
+import dill
 import mlflow
 
 # =============================================================================
@@ -41,38 +23,27 @@ MODELS_DIR = os.path.join(BASE_DIR, "models")
 EMBED_DIR  = os.path.join(BASE_DIR, "embeddings")
 MLFLOW_URI = "file:///" + os.path.join(BASE_DIR, "mlflow").replace("\\", "/")
 
-CLEAN_PARQUET      = os.path.join(DATA_DIR,   "clean_merge_df.parquet")
-TEST_PARQUET       = os.path.join(DATA_DIR,   "test_df.parquet")
-APRIORI_PKL        = os.path.join(MODELS_DIR, "apriori_recommender.pkl")
-PRODUCT_PKL        = os.path.join(MODELS_DIR, "product_recommender.pkl")
-CF_PKL             = os.path.join(MODELS_DIR, "cf_recommender.pkl")
-PRODUCT_VECS_NPZ   = os.path.join(EMBED_DIR,  "product_vecs.npz")
-HYBRID_PKL         = os.path.join(MODELS_DIR, "hybrid_recommender.pkl")
+CLEAN_PARQUET    = os.path.join(DATA_DIR,   "clean_merge_df.parquet")
+TEST_PARQUET     = os.path.join(DATA_DIR,   "test_df.parquet")
+TRAIN_PARQUET    = os.path.join(DATA_DIR,   "train_df.parquet")        # FIX: added
+APRIORI_PKL      = os.path.join(MODELS_DIR, "apriori_recommender.pkl")
+PRODUCT_PKL      = os.path.join(MODELS_DIR, "product_recommender.pkl")
+CF_PKL           = os.path.join(MODELS_DIR, "cf_recommender.pkl")
+PRODUCT_VECS_NPZ = os.path.join(EMBED_DIR,  "product_vecs.npz")
+HYBRID_PKL       = os.path.join(MODELS_DIR, "hybrid_recommender.pkl")
+USER_ITEM_NPZ    = os.path.join(MODELS_DIR, "user_item_matrix.npz")    # FIX: added
 
-# =============================================================================
-# Import Phase 4 + Phase 5 classes so pickle can resolve them when loading PKLs
-# Both files saved their models with pickle.dump() — the class definition must
-# be importable in this process before dill/pickle can deserialise the objects.
-# =============================================================================
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
 
-# Python cannot import files starting with a digit using normal import syntax.
-# Use importlib to load Phase 4 + Phase 5 modules so pickle can resolve
-# AprioriRecommender, ProductRecommender, CollaborativeFilteringRecommender
-# when deserialising the saved PKL files.
 import importlib
-
 _mod04 = importlib.import_module("04_apriori_recommender")
-AprioriRecommender = _mod04.AprioriRecommender                          # noqa: F841
+AprioriRecommender = _mod04.AprioriRecommender
 
 _mod05 = importlib.import_module("05_content_cf_recommender")
-ProductRecommender               = _mod05.ProductRecommender            # noqa: F841
-CollaborativeFilteringRecommender = _mod05.CollaborativeFilteringRecommender  # noqa: F841
+ProductRecommender                = _mod05.ProductRecommender
+CollaborativeFilteringRecommender = _mod05.CollaborativeFilteringRecommender
 
-# =============================================================================
-# MLflow — same URI and experiment name used by all phases
-# =============================================================================
 mlflow.set_tracking_uri(MLFLOW_URI)
 mlflow.set_experiment("DS11")
 
@@ -82,20 +53,14 @@ mlflow.set_experiment("DS11")
 # =============================================================================
 
 def _load_pkl(path: str):
-    """Use dill for all PKL loading — handles scipy sparse + class references."""
     with open(path, "rb") as f:
         return dill.load(f)
 
 
 def load_product_vecs() -> dict:
-    """
-    Load embeddings/product_vecs.npz saved by Phase 7.
-    Phase 7 saved with: np.savez(path, keys=id_array, vecs=matrix)
-    Returns: {item_id: np.ndarray(768,)} — all values float32.
-    """
-    data   = np.load(PRODUCT_VECS_NPZ, allow_pickle=True)
-    ids    = [str(i) for i in data["keys"].tolist()]
-    vecs   = data["vecs"].astype(np.float32)           # (N, 768)
+    data = np.load(PRODUCT_VECS_NPZ, allow_pickle=True)
+    ids  = [str(i) for i in data["keys"].tolist()]
+    vecs = data["vecs"].astype(np.float32)
     print(f"[load] product_vecs: {len(ids):,} items  shape={vecs.shape}")
     return {iid: vecs[i] for i, iid in enumerate(ids)}
 
@@ -104,15 +69,15 @@ def load_product_vecs() -> dict:
 # METRIC HELPERS
 # =============================================================================
 
-def _recall(rec: list, rel: set, k: int) -> float:
+def _recall(rec, rel, k):
     return sum(1 for r in rec[:k] if r in rel) / len(rel) if rel else 0.0
 
-def _ndcg(rec: list, rel: set, k: int) -> float:
+def _ndcg(rec, rel, k):
     dcg  = sum(1.0 / np.log2(i + 2) for i, r in enumerate(rec[:k]) if r in rel)
     idcg = sum(1.0 / np.log2(i + 2) for i in range(min(len(rel), k)))
     return dcg / idcg if idcg else 0.0
 
-def _precision(rec: list, rel: set, k: int) -> float:
+def _precision(rec, rel, k):
     return sum(1 for r in rec[:k] if r in rel) / k if k else 0.0
 
 
@@ -121,54 +86,53 @@ def _precision(rec: list, rel: set, k: int) -> float:
 # =============================================================================
 
 class HybridRecommender:
-    """
-    8.1 — Wraps AprioriRecommender + CollaborativeFilteringRecommender +
-    ProductRecommender.  Collects top-20 candidates from each engine, applies
-    weighted score fusion, and returns a ranked list with per-result source tags.
-
-    Cold-start paths:
-      8.2 — new user  (user_id not in CF known_users) → content + semantic only
-      8.3 — new item  (review count < 3)              → embedding similarity only
-    """
 
     def __init__(
         self,
         apriori_rec,
         cf_rec,
         product_rec,
-        product_vecs:     dict,          # {item_id: np.ndarray(768,)}
-        merge_df:         pd.DataFrame,
-        cf_weight:        float = 0.45,
-        content_weight:   float = 0.35,
-        apriori_weight:   float = 0.20,
-        top_k_per_engine: int   = 20,
+        product_vecs:      dict,
+        merge_df:          pd.DataFrame,
+        user_item_matrix,                   # FIX: store explicitly
+        cf_weight:         float = 0.45,
+        content_weight:    float = 0.35,
+        apriori_weight:    float = 0.20,
+        top_k_per_engine:  int   = 20,
+        new_item_threshold: int  = 1,       # FIX: lowered from 3 to 1
     ):
-        self.apriori_rec    = apriori_rec
-        self.cf_rec         = cf_rec
-        self.product_rec    = product_rec
-        self.product_vecs   = product_vecs
-        self.cf_weight      = cf_weight
-        self.content_weight = content_weight
-        self.apriori_weight = apriori_weight
-        self.top_k          = top_k_per_engine
+        self.apriori_rec      = apriori_rec
+        self.cf_rec           = cf_rec
+        self.product_rec      = product_rec
+        self.product_vecs     = product_vecs
+        self.cf_weight        = cf_weight
+        self.content_weight   = content_weight
+        self.apriori_weight   = apriori_weight
+        self.top_k            = top_k_per_engine
+        self.new_item_threshold = new_item_threshold
 
-        # Review counts per item_id — drives 8.3 gate
+        # FIX: store user_item_matrix for Phase 10 ALS
+        self.user_item_matrix = user_item_matrix
+
+        # Review counts per item_id
         self._review_counts: dict = (
             merge_df.groupby("item_id")["rating"].count().to_dict()
         )
 
-        # Known users from CF model — drives 8.2 gate
-        # getattr guard handles any CF model that doesn't store known_users
-        self._known_users: set = set(getattr(cf_rec, "known_users", []))
+        # FIX: use cf_rec.user_map (not known_users — confirmed attribute name)
+        self._known_users: set = set(cf_rec.user_map.keys())
 
-        # Pre-compute embedding matrix once — avoids rebuild on every API call
-        # (product_vecs is {item_id: np.ndarray(768,)})
+        # FIX: store user_to_idx and idx_to_item explicitly for Phase 10
+        self.user_to_idx = cf_rec.user_map        # user_id -> idx
+        self.idx_to_item = cf_rec.idx_to_item     # idx -> item_id
+
+        # Pre-compute embedding matrix
         self._vec_ids:    list       = list(product_vecs.keys())
         self._vec_matrix: np.ndarray = np.array(
             list(product_vecs.values()), dtype=np.float32
-        )  # shape (N, 768)
+        )
 
-        # Lightweight item metadata for decorating results
+        # Item metadata
         self._item_meta: dict = self._build_meta(merge_df)
 
     # ── metadata ─────────────────────────────────────────────────────────────
@@ -195,36 +159,47 @@ class HybridRecommender:
 
     def _is_new_user(self, user_id: str) -> bool:
         """8.2 — True when user_id has no CF interaction history."""
+        # FIX: check _known_users which is now populated from cf_rec.user_map
         return str(user_id) not in self._known_users
 
     def _is_new_item(self, item_id: str) -> bool:
-        """8.3 — True when item has fewer than 3 reviews."""
-        return self._review_count(item_id) < 3
+        """8.3 — True when item has fewer than new_item_threshold reviews."""
+        # FIX: use configurable threshold (default 1 instead of 3)
+        return self._review_count(item_id) < self.new_item_threshold
 
-    # ── embedding cosine similarity (used by both cold-start paths) ───────────
+    # ── get seen items for a user (for filtering already seen) ───────────────
+
+    def _get_seen_items(self, user_id: str) -> set:
+        """
+        FIX: Returns set of item_ids already seen by user.
+        Used to filter out already seen items from recommendations.
+        """
+        if user_id not in self.user_to_idx:
+            return set()
+        user_idx = self.user_to_idx[user_id]
+        if self.user_item_matrix is None:
+            return set()
+        row = self.user_item_matrix[user_idx]
+        seen_indices = row.indices.tolist()
+        return {
+            self.idx_to_item[i]
+            for i in seen_indices
+            if i in self.idx_to_item
+        }
+
+    # ── embedding cosine similarity ───────────────────────────────────────────
 
     def _semantic_similar(self, item_id: str, top_n: int) -> list:
-        """
-        Cosine similarity over product_vecs.
-        Uses pre-computed _vec_matrix (built once in __init__) — safe for
-        repeated API calls without per-request matrix reconstruction.
-        Returns list[dict] {item_id, title, score, source}.
-        """
         if item_id not in self.product_vecs:
             return []
-
-        q   = self.product_vecs[item_id]          # (768,)
-        ids = self._vec_ids                        # pre-computed in __init__
-        mat = self._vec_matrix                     # pre-computed in __init__ (N, 768)
-
-        # Normalise for cosine similarity
-        qn   = q   / (np.linalg.norm(q)                              + 1e-9)
-        mn   = mat / (np.linalg.norm(mat, axis=1, keepdims=True)     + 1e-9)
-        sims = mn @ qn                             # (N,)
-
-        top_i = np.argpartition(-sims, min(top_n + 1, len(sims) - 1))[: top_n + 1]
+        q   = self.product_vecs[item_id]
+        ids = self._vec_ids
+        mat = self._vec_matrix
+        qn  = q   / (np.linalg.norm(q) + 1e-9)
+        mn  = mat / (np.linalg.norm(mat, axis=1, keepdims=True) + 1e-9)
+        sims = mn @ qn
+        top_i = np.argpartition(-sims, min(top_n + 1, len(sims) - 1))[:top_n + 1]
         top_i = top_i[np.argsort(-sims[top_i])]
-
         out = []
         for i in top_i:
             iid = ids[i]
@@ -240,16 +215,10 @@ class HybridRecommender:
                 break
         return out
 
-    # ── 8.2 cold-start: new user ──────────────────────────────────────────────
+    # ── cold-start paths ──────────────────────────────────────────────────────
 
     def _cold_start_new_user(self, item_id: str, top_n: int) -> list:
-        """
-        8.2 — No CF signal available.
-        Route to ProductRecommender + semantic embedding similarity only.
-        """
         candidates = []
-
-        # ProductRecommender (content-based scoring)
         for r in self.product_rec.get_recommendations(item_id, top_n=self.top_k):
             candidates.append({
                 "item_id": str(r["item_id"]),
@@ -257,20 +226,11 @@ class HybridRecommender:
                 "score":   float(r["score"]),
                 "source":  "content_cold_start",
             })
-
-        # Semantic embedding similarity
         for r in self._semantic_similar(item_id, top_n=self.top_k):
             candidates.append({**r, "source": "semantic_cold_start"})
-
         return self._dedup(candidates, top_n, exclude=item_id)
 
-    # ── 8.3 cold-start: new item ──────────────────────────────────────────────
-
     def _cold_start_new_item(self, item_id: str, top_n: int) -> list:
-        """
-        8.3 — Fewer than 3 reviews; no reliable rating signal.
-        Use product_text embedding similarity only.
-        """
         results = self._semantic_similar(item_id, top_n=top_n)
         for r in results:
             r["source"] = "embedding_new_item"
@@ -279,7 +239,6 @@ class HybridRecommender:
     # ── warm-path engine calls ────────────────────────────────────────────────
 
     def _get_apriori(self, item_id: str) -> list:
-        """Calls AprioriRecommender; returns list[dict] {item_id, score}."""
         recs = self.apriori_rec.recommend_apriori(item_id, top_k=self.top_k)
         out  = []
         for r in (recs or []):
@@ -293,50 +252,22 @@ class HybridRecommender:
         return out
 
     def _get_cf(self, item_id: str) -> list:
-        """
-        Calls CollaborativeFilteringRecommender.
-        Phase 5 recommend_products_cf() returns list[dict] {item_id, score}.
-        """
         recs = self.cf_rec.recommend_products_cf(item_id, top_k=self.top_k)
         return [
-            {
-                "item_id": str(r["item_id"]),
-                "score":   float(r["score"]),
-                "source":  "cf",
-            }
+            {"item_id": str(r["item_id"]), "score": float(r["score"]), "source": "cf"}
             for r in (recs or [])
         ]
 
     def _get_content(self, item_id: str) -> list:
-        """
-        Calls ProductRecommender.
-        Phase 5 get_recommendations() returns list[dict] {item_id, score}.
-        """
         recs = self.product_rec.get_recommendations(item_id, top_n=self.top_k)
         return [
-            {
-                "item_id": str(r["item_id"]),
-                "score":   float(r["score"]),
-                "source":  "content",
-            }
+            {"item_id": str(r["item_id"]), "score": float(r["score"]), "source": "content"}
             for r in (recs or [])
         ]
 
     # ── weighted score fusion ─────────────────────────────────────────────────
 
-    def _fuse(
-        self,
-        apriori:  list,
-        cf:       list,
-        content:  list,
-        exclude:  str,
-        top_n:    int,
-    ) -> list:
-        """
-        Weighted fusion: hybrid_score = w_cf*cf + w_content*content + w_apriori*apriori.
-        Items appearing in only one engine keep their single weighted component.
-        Dominant source tag added for transparency.
-        """
+    def _fuse(self, apriori, cf, content, exclude, top_n):
         def _index(lst, weight):
             return {r["item_id"]: r["score"] * weight for r in lst}
 
@@ -372,8 +303,7 @@ class HybridRecommender:
     # ── deduplication helper ──────────────────────────────────────────────────
 
     @staticmethod
-    def _dedup(candidates: list, top_n: int, exclude: str = "") -> list:
-        """Keep highest score per item_id; sort descending; return top_n."""
+    def _dedup(candidates, top_n, exclude=""):
         best = {}
         for c in candidates:
             iid = c["item_id"]
@@ -384,7 +314,7 @@ class HybridRecommender:
         return sorted(best.values(), key=lambda x: x["score"], reverse=True)[:top_n]
 
     # =========================================================================
-    # 8.4  final_recommendation — main public API
+    # 8.4  final_recommendation
     # =========================================================================
 
     def final_recommendation(
@@ -393,62 +323,65 @@ class HybridRecommender:
         user_id: str,
         top_n:   int = 10,
     ) -> list:
-        """
-        8.4 — Detects cold-start automatically; returns ranked list with
-        per-result source tags.
-
-        Returns:
-            list[dict]: [{item_id, title, score, source}, ...]
-        """
         item_id = str(item_id)
         user_id = str(user_id)
 
-        # 8.2 — new user: no CF history
+        # 8.2 — new user
         if self._is_new_user(user_id):
-            print(f"[Hybrid] NEW USER  user_id={user_id!r}")
             return self._cold_start_new_user(item_id, top_n)
 
-        # 8.3 — new item: fewer than 3 reviews
+        # 8.3 — new item
         if self._is_new_item(item_id):
-            print(f"[Hybrid] NEW ITEM  item_id={item_id!r}  "
-                  f"reviews={self._review_count(item_id)}")
             return self._cold_start_new_item(item_id, top_n)
 
-        # 8.1 — warm path: all three engines
+        # FIX: get seen items to exclude from recommendations
+        seen_items = self._get_seen_items(user_id)
+
+        # 8.1 — warm path
         results = self._fuse(
             self._get_apriori(item_id),
             self._get_cf(item_id),
             self._get_content(item_id),
             exclude=item_id,
-            top_n=top_n,
+            top_n=top_n + len(seen_items),   # over-fetch then filter
         )
-        return results
+
+        # FIX: filter out already seen items
+        results = [r for r in results if r["item_id"] not in seen_items]
+        return results[:top_n]
 
 
 # =============================================================================
-# EVALUATION  (for 8.5 MLflow metrics)
+# EVALUATION
 # =============================================================================
 
 def evaluate_hybrid(
     hybrid:   HybridRecommender,
     test_df:  pd.DataFrame,
+    train_df: pd.DataFrame,         # FIX: added train_df for seed selection
     k:        int = 10,
     n_users:  int = 500,
 ) -> dict:
     """
-    Evaluates the hybrid recommender on the Phase 6 test split.
-
-    Evaluation protocol:
-      - relevant = all items the user interacted with in test_df (ground truth)
-      - query    = one item from relevant, excluded from the relevant set so the
-                   recommender is not trivially scored on the seed item itself
-      - Uses sorted(relevant)[0] for deterministic query selection across runs
-
-    Returns Recall@k, NDCG@k, Precision@k.
+    FIX: Correct evaluation protocol.
+    - seed  = last item from user's training history (input != ground truth)
+    - ground truth = item in test_df (last interaction overall)
     """
-    test_df = test_df.copy()
-    test_df["item_id"] = test_df["item_id"].astype(str)
-    test_df["user_id"] = test_df["user_id"].astype(str)
+    test_df  = test_df.copy()
+    train_df = train_df.copy()
+
+    test_df["item_id"]  = test_df["item_id"].astype(str)
+    test_df["user_id"]  = test_df["user_id"].astype(str)
+    train_df["item_id"] = train_df["item_id"].astype(str)
+    train_df["user_id"] = train_df["user_id"].astype(str)
+
+    # Build seed lookup: user_id -> last training item
+    seed_lookup = (
+        train_df.sort_values("timestamp")
+        .groupby("user_id")["item_id"]
+        .last()
+        .to_dict()
+    )
 
     users = (
         test_df["user_id"]
@@ -459,28 +392,22 @@ def evaluate_hybrid(
 
     R, N, P = [], [], []
     for uid in users:
-        u_rows  = test_df[test_df["user_id"] == uid]
-        all_items = set(u_rows["item_id"].tolist())
+        # Ground truth = test item
+        u_rows   = test_df[test_df["user_id"] == uid]
+        relevant = set(u_rows["item_id"].tolist())
 
-        if not all_items:
+        if not relevant:
             continue
 
-        # Deterministic query: sorted so results are reproducible across runs
-        query = sorted(all_items)[0]
-
-        if len(all_items) == 1:
-            # Phase 6 temporal split: exactly 1 test item per user (last interaction).
-            # Standard single-item leave-one-out: seed with that item,
-            # then check if the recommender surfaces it in top-k.
-            relevant = all_items          # {query}
-        else:
-            # Multiple test items: leave-one-out — exclude query from relevant
-            relevant = all_items - {query}
+        # FIX: seed from training history, not test item
+        seed = seed_lookup.get(uid)
+        if seed is None:
+            continue
 
         try:
             rec_ids = [
                 r["item_id"]
-                for r in hybrid.final_recommendation(query, uid, top_n=k)
+                for r in hybrid.final_recommendation(seed, uid, top_n=k)
             ]
         except Exception as e:
             print(f"[WARN] evaluate_hybrid user={uid}: {e}")
@@ -491,7 +418,7 @@ def evaluate_hybrid(
         P.append(_precision(rec_ids, relevant, k))
 
     if not R:
-        print("[WARN] evaluate_hybrid: no users evaluated — check test_df split.")
+        print("[WARN] evaluate_hybrid: no users evaluated.")
         return {f"recall_at_{k}": 0.0, f"ndcg_at_{k}": 0.0, f"precision_at_{k}": 0.0}
 
     return {
@@ -502,44 +429,30 @@ def evaluate_hybrid(
 
 
 # =============================================================================
-# 8.5  MLflow logging
+# 8.5 + 8.6
 # =============================================================================
 
-def log_hybrid_mlflow(hybrid: HybridRecommender, metrics: dict) -> None:
-    """
-    8.5 — One MLflow run named 'Hybrid' under experiment 'DS11'.
-    Params : cf_weight, content_weight, apriori_weight, top_k_per_engine
-    Metrics: recall_at_10, ndcg_at_10, precision_at_10
-    Artifact: models/hybrid_recommender.pkl
-    """
+def log_hybrid_mlflow(hybrid, metrics):
     with mlflow.start_run(run_name="Hybrid"):
-        mlflow.log_param("cf_weight",        hybrid.cf_weight)
-        mlflow.log_param("content_weight",   hybrid.content_weight)
-        mlflow.log_param("apriori_weight",   hybrid.apriori_weight)
-        mlflow.log_param("top_k_per_engine", hybrid.top_k)
-        for metric_name, metric_val in metrics.items():
-            mlflow.log_metric(metric_name, metric_val)
+        mlflow.log_param("cf_weight",         hybrid.cf_weight)
+        mlflow.log_param("content_weight",    hybrid.content_weight)
+        mlflow.log_param("apriori_weight",    hybrid.apriori_weight)
+        mlflow.log_param("top_k_per_engine",  hybrid.top_k)
+        mlflow.log_param("new_item_threshold", hybrid.new_item_threshold)
+        for name, val in metrics.items():
+            mlflow.log_metric(name, val)
         mlflow.log_artifact(HYBRID_PKL)
     print(f"[MLflow] Hybrid run logged → {metrics}")
 
 
-# =============================================================================
-# 8.6  dill serialisation
-# =============================================================================
-
-def save_hybrid(hybrid: HybridRecommender, path: str = HYBRID_PKL) -> None:
-    """
-    8.6 — Serialize with dill (handles scipy sparse matrices and class
-    references that standard pickle cannot always round-trip).
-    """
+def save_hybrid(hybrid, path=HYBRID_PKL):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "wb") as f:
         dill.dump(hybrid, f)
-    print(f"[dill]  Saved → {path}  ({os.path.getsize(path) / 1e6:.1f} MB)")
+    print(f"[dill] Saved → {path}  ({os.path.getsize(path)/1e6:.1f} MB)")
 
 
-def load_hybrid(path: str = HYBRID_PKL) -> HybridRecommender:
-    """Load the serialised HybridRecommender — used by Phase 12 FastAPI."""
+def load_hybrid(path=HYBRID_PKL):
     with open(path, "rb") as f:
         return dill.load(f)
 
@@ -554,91 +467,128 @@ def main():
     print("=" * 60)
 
     # ── 1. Load data ──────────────────────────────────────────────────────────
-    print("\n[1/6] Loading clean_merge_df …")
-    df = pd.read_parquet(CLEAN_PARQUET)
-    df["item_id"] = df["item_id"].astype(str)
-    df["user_id"] = df["user_id"].astype(str)
-    print(f"      rows={len(df):,}  "
-          f"items={df['item_id'].nunique():,}  "
-          f"users={df['user_id'].nunique():,}")
+    print("\n[1/6] Loading data …")
+    df       = pd.read_parquet(CLEAN_PARQUET)
+    train_df = pd.read_parquet(TRAIN_PARQUET)   # FIX: load train_df
 
-    # ── 2. Load product_vecs (Phase 7) ────────────────────────────────────────
+    df["item_id"]       = df["item_id"].astype(str)
+    df["user_id"]       = df["user_id"].astype(str)
+    train_df["item_id"] = train_df["item_id"].astype(str)
+    train_df["user_id"] = train_df["user_id"].astype(str)
+
+    print(f"  merge_df : {len(df):,} rows")
+    print(f"  train_df : {len(train_df):,} rows")
+
+    # ── 2. Load product_vecs ──────────────────────────────────────────────────
     print("\n[2/6] Loading product_vecs.npz …")
     product_vecs = load_product_vecs()
-    print(f"      {len(product_vecs):,} item vectors loaded")
 
-    # ── 3. Load component models (Phase 4 + Phase 5) ──────────────────────────
+    # ── 3. Load component models ──────────────────────────────────────────────
     print("\n[3/6] Loading component recommenders …")
     apriori_rec = _load_pkl(APRIORI_PKL)
     product_rec = _load_pkl(PRODUCT_PKL)
     cf_rec      = _load_pkl(CF_PKL)
-    print(f"      AprioriRecommender     ✓")
-    print(f"      ProductRecommender     ✓")
-    print(f"      CFRecommender          ✓  "
-          f"known_users={len(cf_rec.known_users):,}")
 
-    # ── 4. Build HybridRecommender (8.1) ──────────────────────────────────────
+    # FIX: inject train_df into product_rec for seed selection in Phase 10
+    if hasattr(product_rec, "set_user_history"):
+        product_rec.set_user_history(train_df)
+        print(f"  ProductRecommender user_history injected ✓")
+
+    print(f"  AprioriRecommender  ✓")
+    print(f"  ProductRecommender  ✓")
+    print(f"  CFRecommender       ✓  known_users={len(cf_rec.user_map):,}")
+
+    # ── FIX: load or build user_item_matrix ───────────────────────────────────
+    # ── FIX Option 2: Phase 8 builds and saves user_item_matrix ──────────────────
+    print("\n[3b] Building user_item_matrix from train_df …")
+
+    with open(os.path.join(DATA_DIR, "user_map.json"), "r") as f:
+        user_map = {k: int(v) for k, v in json.load(f).items()}
+    with open(os.path.join(DATA_DIR, "item_map.json"), "r") as f:
+        item_map = {k: int(v) for k, v in json.load(f).items()}
+
+    train_aligned = train_df[
+        train_df["user_id"].isin(user_map) &
+        train_df["item_id"].isin(item_map)
+    ].copy()
+
+    train_aligned["user_idx"] = train_aligned["user_id"].map(user_map).astype(int)
+    train_aligned["item_idx"] = train_aligned["item_id"].map(item_map).astype(int)
+    train_aligned["confidence"] = train_aligned["rating"].astype(np.float32) / 5.0
+
+    rows = train_aligned["item_idx"].values
+    cols = train_aligned["user_idx"].values
+    data = train_aligned["confidence"].astype(np.float32).values
+
+    n_users = len(user_map)
+    n_items = len(item_map)
+
+    item_user_matrix = sp.csr_matrix((data, (rows, cols)), shape=(n_items, n_users))
+    user_item_matrix = item_user_matrix.T.tocsr()
+
+    # Save for Phase 9 to load directly
+    sp.save_npz(USER_ITEM_NPZ, user_item_matrix)
+    print(f"  user_item_matrix: {user_item_matrix.shape}  nnz={user_item_matrix.nnz}")
+    print(f"  Saved → {USER_ITEM_NPZ}")
+
+    # ── 4. Build HybridRecommender ────────────────────────────────────────────
     print("\n[4/6] Building HybridRecommender …")
     hybrid = HybridRecommender(
-        apriori_rec      = apriori_rec,
-        cf_rec           = cf_rec,
-        product_rec      = product_rec,
-        product_vecs     = product_vecs,
-        merge_df         = df,
-        cf_weight        = 0.45,
-        content_weight   = 0.35,
-        apriori_weight   = 0.20,
-        top_k_per_engine = 20,
+        apriori_rec       = apriori_rec,
+        cf_rec            = cf_rec,
+        product_rec       = product_rec,
+        product_vecs      = product_vecs,
+        merge_df          = df,
+        user_item_matrix  = user_item_matrix,   # FIX: pass matrix
+        cf_weight         = 0.45,
+        content_weight    = 0.35,
+        apriori_weight    = 0.20,
+        top_k_per_engine  = 20,
+        new_item_threshold = 1,                 # FIX: lowered threshold
     )
-    print(f"      known_users={len(hybrid._known_users):,}  "
+    print(f"  known_users={len(hybrid._known_users):,}  "
           f"tracked_items={len(hybrid._review_counts):,}")
 
     # ── 5. Smoke tests ────────────────────────────────────────────────────────
     print("\n[5/6] Smoke tests …")
-
     sample_item = df["item_id"].iloc[100]
     sample_user = df["user_id"].iloc[100]
 
-    # Warm path (8.1)
-    print(f"\n  [8.1] Warm path   item={sample_item!r}  user={sample_user!r}")
+    print(f"\n  [8.1] Warm path  item={sample_item!r}  user={sample_user!r}")
     for r in hybrid.final_recommendation(sample_item, sample_user, top_n=5):
-        print(f"        [{r['source']:<22}] {r['item_id'][:20]:<22} score={r['score']:.4f}  {r['title'][:40]}")
+        print(f"    [{r['source']:<22}] {r['item_id']:<22} score={r['score']:.4f}")
 
-    # Cold-start: new user (8.2)
     print("\n  [8.2] Cold-start NEW USER")
     for r in hybrid.final_recommendation(sample_item, "__NEW_USER__", top_n=5):
-        print(f"        [{r['source']:<22}] {r['item_id'][:20]:<22} score={r['score']:.4f}")
+        print(f"    [{r['source']:<22}] {r['item_id']:<22} score={r['score']:.4f}")
 
-    # Cold-start: new item (8.3) — inject a synthetic low-review item
     rare_item = "__RARE_ITEM_TEST__"
-    hybrid._review_counts[rare_item] = 1
+    hybrid._review_counts[rare_item] = 0
     ref_vec = next(iter(product_vecs.values()))
     hybrid.product_vecs[rare_item] = (
         ref_vec + np.random.randn(*ref_vec.shape).astype(np.float32) * 0.02
     )
-    print(f"\n  [8.3] Cold-start NEW ITEM  (reviews=1)")
+    print(f"\n  [8.3] Cold-start NEW ITEM (reviews=0)")
     for r in hybrid.final_recommendation(rare_item, sample_user, top_n=5):
-        print(f"        [{r['source']:<22}] {r['item_id'][:20]:<22} score={r['score']:.4f}")
-    # Remove synthetic item
+        print(f"    [{r['source']:<22}] {r['item_id']:<22} score={r['score']:.4f}")
     hybrid._review_counts.pop(rare_item)
     hybrid.product_vecs.pop(rare_item)
 
-    # ── 6. Evaluate → save → MLflow ───────────────────────────────────────────
-    print("\n[6/6] Evaluate → Save (8.6) → MLflow (8.5) …")
+    # ── 6. Evaluate → Save → MLflow ───────────────────────────────────────────
+    print("\n[6/6] Evaluate → Save → MLflow …")
 
-    if os.path.exists(TEST_PARQUET):
-        print("      Evaluating on test_df.parquet …")
+    if os.path.exists(TEST_PARQUET) and os.path.exists(TRAIN_PARQUET):
         test_df = pd.read_parquet(TEST_PARQUET)
-        metrics = evaluate_hybrid(hybrid, test_df, k=10, n_users=500)
+        # FIX: pass train_df to evaluate_hybrid
+        metrics = evaluate_hybrid(hybrid, test_df, train_df, k=10, n_users=500)
     else:
-        print("      [WARN] test_df.parquet not found — run Phase 6 first.")
-        print("             Using zero placeholder metrics for MLflow log.")
+        print("  [WARN] test_df or train_df not found — using zero metrics.")
         metrics = {"recall_at_10": 0.0, "ndcg_at_10": 0.0, "precision_at_10": 0.0}
 
-    print(f"      Metrics: {metrics}")
+    print(f"  Metrics: {metrics}")
 
-    save_hybrid(hybrid, HYBRID_PKL)         # 8.6
-    log_hybrid_mlflow(hybrid, metrics)      # 8.5
+    save_hybrid(hybrid, HYBRID_PKL)
+    log_hybrid_mlflow(hybrid, metrics)
 
     print(f"\n{'=' * 60}")
     print("✓  Phase 8 complete.")
