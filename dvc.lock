@@ -87,17 +87,25 @@ stages:
       md5: faf13a819e0f2185a07f57ae9b693e61
       size: 14068
     outs:
+    - path: data/test_df.parquet
+      hash: md5
+      md5: 04495729d7ecf963ddcc1895e64777b0
+      size: 725485
+    - path: data/train_df.parquet
+      hash: md5
+      md5: 17ef9c0b3955725ad543b380a1c8a983
+      size: 2963352
     - path: models/metrics.json
       hash: md5
-      md5: 09c68269af1682eb3f24c181ea46f5d2
-      size: 287
+      md5: 48ea92f97f4e33e4c3ddf14a8e07cf93
+      size: 285
     - path: models/mf_model.pth
       hash: md5
-      md5: 9e6728268bf34ccea3103bce747335a0
+      md5: 1bc0166583cc32d625229109b99591a9
       size: 14788312
     - path: models/ncf_model.pth
       hash: md5
-      md5: e7ad257f15d6d5c1bb7fcb9d821833b5
+      md5: dd3b38040c49fc4adbbeca8d51301e33
       size: 29163156
   embed:
     cmd: python src/07_semantic_search.py
@@ -161,11 +169,11 @@ stages:
       size: 14561835
     - path: models/mf_model.pth
       hash: md5
-      md5: 9e6728268bf34ccea3103bce747335a0
+      md5: 1bc0166583cc32d625229109b99591a9
       size: 14788312
     - path: models/ncf_model.pth
       hash: md5
-      md5: e7ad257f15d6d5c1bb7fcb9d821833b5
+      md5: dd3b38040c49fc4adbbeca8d51301e33
       size: 29163156
     - path: models/svdpp_model.pkl
       hash: md5
@@ -178,5 +186,5 @@ stages:
     outs:
     - path: models/hybrid_recommender.pkl
       hash: md5
-      md5: 1e7fa934693719f2969f3be0301a4a29
+      md5: 0a315a48726d9a7679ab60ed719c545f
       size: 317275820
