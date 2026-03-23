@@ -25,13 +25,13 @@ MLFLOW_URI = "mlflow/"
 
 CLEAN_PARQUET    = os.path.join(DATA_DIR,   "clean_merge_df.parquet")
 TEST_PARQUET     = os.path.join(DATA_DIR,   "test_df.parquet")
-TRAIN_PARQUET    = os.path.join(DATA_DIR,   "train_df.parquet")        # FIX: added
+TRAIN_PARQUET    = os.path.join(DATA_DIR,   "train_df.parquet")
 APRIORI_PKL      = os.path.join(MODELS_DIR, "apriori_recommender.pkl")
 PRODUCT_PKL      = os.path.join(MODELS_DIR, "product_recommender.pkl")
 CF_PKL           = os.path.join(MODELS_DIR, "cf_recommender.pkl")
 PRODUCT_VECS_NPZ = os.path.join(EMBED_DIR,  "product_vecs.npz")
 HYBRID_PKL       = os.path.join(MODELS_DIR, "hybrid_recommender.pkl")
-USER_ITEM_NPZ    = os.path.join(MODELS_DIR, "user_item_matrix.npz")    # FIX: added
+USER_ITEM_NPZ    = os.path.join(MODELS_DIR, "user_item_matrix.npz")
 
 if SRC_DIR not in sys.path:
     sys.path.insert(0, SRC_DIR)
@@ -44,7 +44,7 @@ _mod05 = importlib.import_module("05_content_cf_recommender")
 ProductRecommender                = _mod05.ProductRecommender
 CollaborativeFilteringRecommender = _mod05.CollaborativeFilteringRecommender
 
-mlflow.set_tracking_uri("mlflow/")
+mlflow.set_tracking_uri(MLFLOW_URI)
 mlflow.set_experiment("DS11")
 
 
@@ -92,50 +92,40 @@ class HybridRecommender:
         apriori_rec,
         cf_rec,
         product_rec,
-        product_vecs:      dict,
-        merge_df:          pd.DataFrame,
-        user_item_matrix,                   # FIX: store explicitly
-        cf_weight:         float = 0.45,
-        content_weight:    float = 0.35,
-        apriori_weight:    float = 0.20,
-        top_k_per_engine:  int   = 20,
-        new_item_threshold: int  = 1,       # FIX: lowered from 3 to 1
+        product_vecs:       dict,
+        merge_df:           pd.DataFrame,
+        user_item_matrix,
+        cf_weight:          float = 0.45,
+        content_weight:     float = 0.35,
+        apriori_weight:     float = 0.20,
+        top_k_per_engine:   int   = 20,
+        new_item_threshold: int   = 1,
     ):
-        self.apriori_rec      = apriori_rec
-        self.cf_rec           = cf_rec
-        self.product_rec      = product_rec
-        self.product_vecs     = product_vecs
-        self.cf_weight        = cf_weight
-        self.content_weight   = content_weight
-        self.apriori_weight   = apriori_weight
-        self.top_k            = top_k_per_engine
+        self.apriori_rec        = apriori_rec
+        self.cf_rec             = cf_rec
+        self.product_rec        = product_rec
+        self.product_vecs       = product_vecs
+        self.cf_weight          = cf_weight
+        self.content_weight     = content_weight
+        self.apriori_weight     = apriori_weight
+        self.top_k              = top_k_per_engine
         self.new_item_threshold = new_item_threshold
+        self.user_item_matrix   = user_item_matrix
 
-        # FIX: store user_item_matrix for Phase 10 ALS
-        self.user_item_matrix = user_item_matrix
-
-        # Review counts per item_id
         self._review_counts: dict = (
             merge_df.groupby("item_id")["rating"].count().to_dict()
         )
 
-        # FIX: use cf_rec.user_map (not known_users — confirmed attribute name)
         self._known_users: set = set(cf_rec.user_map.keys())
+        self.user_to_idx       = cf_rec.user_map
+        self.idx_to_item       = cf_rec.idx_to_item
 
-        # FIX: store user_to_idx and idx_to_item explicitly for Phase 10
-        self.user_to_idx = cf_rec.user_map        # user_id -> idx
-        self.idx_to_item = cf_rec.idx_to_item     # idx -> item_id
-
-        # Pre-compute embedding matrix
         self._vec_ids:    list       = list(product_vecs.keys())
         self._vec_matrix: np.ndarray = np.array(
             list(product_vecs.values()), dtype=np.float32
         )
 
-        # Item metadata
         self._item_meta: dict = self._build_meta(merge_df)
-
-    # ── metadata ─────────────────────────────────────────────────────────────
 
     @staticmethod
     def _build_meta(df: pd.DataFrame) -> dict:
@@ -155,25 +145,13 @@ class HybridRecommender:
     def _review_count(self, item_id: str) -> int:
         return self._review_counts.get(item_id, 0)
 
-    # ── cold-start gates ──────────────────────────────────────────────────────
-
     def _is_new_user(self, user_id: str) -> bool:
-        """8.2 — True when user_id has no CF interaction history."""
-        # FIX: check _known_users which is now populated from cf_rec.user_map
         return str(user_id) not in self._known_users
 
     def _is_new_item(self, item_id: str) -> bool:
-        """8.3 — True when item has fewer than new_item_threshold reviews."""
-        # FIX: use configurable threshold (default 1 instead of 3)
         return self._review_count(item_id) < self.new_item_threshold
 
-    # ── get seen items for a user (for filtering already seen) ───────────────
-
     def _get_seen_items(self, user_id: str) -> set:
-        """
-        FIX: Returns set of item_ids already seen by user.
-        Used to filter out already seen items from recommendations.
-        """
         if user_id not in self.user_to_idx:
             return set()
         user_idx = self.user_to_idx[user_id]
@@ -186,8 +164,6 @@ class HybridRecommender:
             for i in seen_indices
             if i in self.idx_to_item
         }
-
-    # ── embedding cosine similarity ───────────────────────────────────────────
 
     def _semantic_similar(self, item_id: str, top_n: int) -> list:
         if item_id not in self.product_vecs:
@@ -215,8 +191,6 @@ class HybridRecommender:
                 break
         return out
 
-    # ── cold-start paths ──────────────────────────────────────────────────────
-
     def _cold_start_new_user(self, item_id: str, top_n: int) -> list:
         candidates = []
         for r in self.product_rec.get_recommendations(item_id, top_n=self.top_k):
@@ -235,8 +209,6 @@ class HybridRecommender:
         for r in results:
             r["source"] = "embedding_new_item"
         return results
-
-    # ── warm-path engine calls ────────────────────────────────────────────────
 
     def _get_apriori(self, item_id: str) -> list:
         recs = self.apriori_rec.recommend_apriori(item_id, top_k=self.top_k)
@@ -264,8 +236,6 @@ class HybridRecommender:
             {"item_id": str(r["item_id"]), "score": float(r["score"]), "source": "content"}
             for r in (recs or [])
         ]
-
-    # ── weighted score fusion ─────────────────────────────────────────────────
 
     def _fuse(self, apriori, cf, content, exclude, top_n):
         def _index(lst, weight):
@@ -300,8 +270,6 @@ class HybridRecommender:
         fused.sort(key=lambda x: x["score"], reverse=True)
         return fused[:top_n]
 
-    # ── deduplication helper ──────────────────────────────────────────────────
-
     @staticmethod
     def _dedup(candidates, top_n, exclude=""):
         best = {}
@@ -313,10 +281,6 @@ class HybridRecommender:
                 best[iid] = c
         return sorted(best.values(), key=lambda x: x["score"], reverse=True)[:top_n]
 
-    # =========================================================================
-    # 8.4  final_recommendation
-    # =========================================================================
-
     def final_recommendation(
         self,
         item_id: str,
@@ -326,27 +290,22 @@ class HybridRecommender:
         item_id = str(item_id)
         user_id = str(user_id)
 
-        # 8.2 — new user
         if self._is_new_user(user_id):
             return self._cold_start_new_user(item_id, top_n)
 
-        # 8.3 — new item
         if self._is_new_item(item_id):
             return self._cold_start_new_item(item_id, top_n)
 
-        # FIX: get seen items to exclude from recommendations
         seen_items = self._get_seen_items(user_id)
 
-        # 8.1 — warm path
         results = self._fuse(
             self._get_apriori(item_id),
             self._get_cf(item_id),
             self._get_content(item_id),
             exclude=item_id,
-            top_n=top_n + len(seen_items),   # over-fetch then filter
+            top_n=top_n + len(seen_items),
         )
 
-        # FIX: filter out already seen items
         results = [r for r in results if r["item_id"] not in seen_items]
         return results[:top_n]
 
@@ -358,15 +317,10 @@ class HybridRecommender:
 def evaluate_hybrid(
     hybrid:   HybridRecommender,
     test_df:  pd.DataFrame,
-    train_df: pd.DataFrame,         # FIX: added train_df for seed selection
+    train_df: pd.DataFrame,
     k:        int = 10,
     n_users:  int = 500,
 ) -> dict:
-    """
-    FIX: Correct evaluation protocol.
-    - seed  = last item from user's training history (input != ground truth)
-    - ground truth = item in test_df (last interaction overall)
-    """
     test_df  = test_df.copy()
     train_df = train_df.copy()
 
@@ -375,7 +329,6 @@ def evaluate_hybrid(
     train_df["item_id"] = train_df["item_id"].astype(str)
     train_df["user_id"] = train_df["user_id"].astype(str)
 
-    # Build seed lookup: user_id -> last training item
     seed_lookup = (
         train_df.sort_values("timestamp")
         .groupby("user_id")["item_id"]
@@ -392,14 +345,12 @@ def evaluate_hybrid(
 
     R, N, P = [], [], []
     for uid in users:
-        # Ground truth = test item
         u_rows   = test_df[test_df["user_id"] == uid]
         relevant = set(u_rows["item_id"].tolist())
 
         if not relevant:
             continue
 
-        # FIX: seed from training history, not test item
         seed = seed_lookup.get(uid)
         if seed is None:
             continue
@@ -429,7 +380,7 @@ def evaluate_hybrid(
 
 
 # =============================================================================
-# 8.5 + 8.6
+# 8.5 + 8.6  save / load / log
 # =============================================================================
 
 def save_hybrid(hybrid, path=HYBRID_PKL):
@@ -445,7 +396,8 @@ def load_hybrid(path=HYBRID_PKL):
 
 
 def log_hybrid_mlflow(hybrid, metrics):
-    save_hybrid(hybrid, HYBRID_PKL)            # ← save_hybrid now defined above
+    # FIX: save_hybrid is called first — file must exist before log_artifact
+    save_hybrid(hybrid, HYBRID_PKL)
     with mlflow.start_run(run_name="Hybrid"):
         mlflow.log_param("cf_weight",          hybrid.cf_weight)
         mlflow.log_param("content_weight",     hybrid.content_weight)
@@ -455,6 +407,8 @@ def log_hybrid_mlflow(hybrid, metrics):
         for name, val in metrics.items():
             mlflow.log_metric(name, val)
         mlflow.log_artifact(HYBRID_PKL)
+        # FIX: also log user_item_matrix — was missing before
+        mlflow.log_artifact(USER_ITEM_NPZ)
 
 
 # =============================================================================
@@ -466,10 +420,9 @@ def main():
     print("Phase 8 — Hybrid Engine + Cold-Start")
     print("=" * 60)
 
-    # ── 1. Load data ──────────────────────────────────────────────────────────
-    print("\n[1/6] Loading data …")
+    print("\n[1/6] Loading data ...")
     df       = pd.read_parquet(CLEAN_PARQUET)
-    train_df = pd.read_parquet(TRAIN_PARQUET)   # FIX: load train_df
+    train_df = pd.read_parquet(TRAIN_PARQUET)
 
     df["item_id"]       = df["item_id"].astype(str)
     df["user_id"]       = df["user_id"].astype(str)
@@ -479,28 +432,23 @@ def main():
     print(f"  merge_df : {len(df):,} rows")
     print(f"  train_df : {len(train_df):,} rows")
 
-    # ── 2. Load product_vecs ──────────────────────────────────────────────────
-    print("\n[2/6] Loading product_vecs.npz …")
+    print("\n[2/6] Loading product_vecs.npz ...")
     product_vecs = load_product_vecs()
 
-    # ── 3. Load component models ──────────────────────────────────────────────
-    print("\n[3/6] Loading component recommenders …")
+    print("\n[3/6] Loading component recommenders ...")
     apriori_rec = _load_pkl(APRIORI_PKL)
     product_rec = _load_pkl(PRODUCT_PKL)
     cf_rec      = _load_pkl(CF_PKL)
 
-    # FIX: inject train_df into product_rec for seed selection in Phase 10
     if hasattr(product_rec, "set_user_history"):
         product_rec.set_user_history(train_df)
-        print(f"  ProductRecommender user_history injected ✓")
+        print("  ProductRecommender user_history injected ✓")
 
     print(f"  AprioriRecommender  ✓")
     print(f"  ProductRecommender  ✓")
     print(f"  CFRecommender       ✓  known_users={len(cf_rec.user_map):,}")
 
-    # ── FIX: load or build user_item_matrix ───────────────────────────────────
-    # ── FIX Option 2: Phase 8 builds and saves user_item_matrix ──────────────────
-    print("\n[3b] Building user_item_matrix from train_df …")
+    print("\n[3b] Building user_item_matrix from train_df ...")
 
     with open(os.path.join(DATA_DIR, "user_map.json"), "r") as f:
         user_map = {k: int(v) for k, v in json.load(f).items()}
@@ -512,8 +460,8 @@ def main():
         train_df["item_id"].isin(item_map)
     ].copy()
 
-    train_aligned["user_idx"] = train_aligned["user_id"].map(user_map).astype(int)
-    train_aligned["item_idx"] = train_aligned["item_id"].map(item_map).astype(int)
+    train_aligned["user_idx"]   = train_aligned["user_id"].map(user_map).astype(int)
+    train_aligned["item_idx"]   = train_aligned["item_id"].map(item_map).astype(int)
     train_aligned["confidence"] = train_aligned["rating"].astype(np.float32) / 5.0
 
     rows = train_aligned["item_idx"].values
@@ -526,31 +474,28 @@ def main():
     item_user_matrix = sp.csr_matrix((data, (rows, cols)), shape=(n_items, n_users))
     user_item_matrix = item_user_matrix.T.tocsr()
 
-    # Save for Phase 9 to load directly
     sp.save_npz(USER_ITEM_NPZ, user_item_matrix)
     print(f"  user_item_matrix: {user_item_matrix.shape}  nnz={user_item_matrix.nnz}")
     print(f"  Saved → {USER_ITEM_NPZ}")
 
-    # ── 4. Build HybridRecommender ────────────────────────────────────────────
-    print("\n[4/6] Building HybridRecommender …")
+    print("\n[4/6] Building HybridRecommender ...")
     hybrid = HybridRecommender(
-        apriori_rec       = apriori_rec,
-        cf_rec            = cf_rec,
-        product_rec       = product_rec,
-        product_vecs      = product_vecs,
-        merge_df          = df,
-        user_item_matrix  = user_item_matrix,   # FIX: pass matrix
-        cf_weight         = 0.45,
-        content_weight    = 0.35,
-        apriori_weight    = 0.20,
-        top_k_per_engine  = 20,
-        new_item_threshold = 1,                 # FIX: lowered threshold
+        apriori_rec        = apriori_rec,
+        cf_rec             = cf_rec,
+        product_rec        = product_rec,
+        product_vecs       = product_vecs,
+        merge_df           = df,
+        user_item_matrix   = user_item_matrix,
+        cf_weight          = 0.45,
+        content_weight     = 0.35,
+        apriori_weight     = 0.20,
+        top_k_per_engine   = 20,
+        new_item_threshold = 1,
     )
     print(f"  known_users={len(hybrid._known_users):,}  "
           f"tracked_items={len(hybrid._review_counts):,}")
 
-    # ── 5. Smoke tests ────────────────────────────────────────────────────────
-    print("\n[5/6] Smoke tests …")
+    print("\n[5/6] Smoke tests ...")
     sample_item = df["item_id"].iloc[100]
     sample_user = df["user_id"].iloc[100]
 
@@ -574,12 +519,10 @@ def main():
     hybrid._review_counts.pop(rare_item)
     hybrid.product_vecs.pop(rare_item)
 
-    # ── 6. Evaluate → Save → MLflow ───────────────────────────────────────────
-    print("\n[6/6] Evaluate → Save → MLflow …")
+    print("\n[6/6] Evaluate → Save → MLflow ...")
 
     if os.path.exists(TEST_PARQUET) and os.path.exists(TRAIN_PARQUET):
         test_df = pd.read_parquet(TEST_PARQUET)
-        # FIX: pass train_df to evaluate_hybrid
         metrics = evaluate_hybrid(hybrid, test_df, train_df, k=10, n_users=500)
     else:
         print("  [WARN] test_df or train_df not found — using zero metrics.")
@@ -591,8 +534,9 @@ def main():
 
     print(f"\n{'=' * 60}")
     print("✓  Phase 8 complete.")
-    print(f"   Model  : {HYBRID_PKL}")
-    print(f"   MLflow : {MLFLOW_URI}")
+    print(f"   Model        : {HYBRID_PKL}")
+    print(f"   user_item_matrix : {USER_ITEM_NPZ}")
+    print(f"   MLflow URI   : {MLFLOW_URI}")
     print(f"{'=' * 60}")
 
 

@@ -159,8 +159,6 @@ def evaluate_rmse(model, df):
 
 # =========================
 # EVALUATE RANKING
-# Fix: test_df may have only 1 item per user (leave-1-out split)
-# Use sampled negative protocol — 1 true item vs 500 negatives
 # =========================
 def evaluate_ranking(model, test_df, n_items, k=10, seed_lookup=None):
     model.eval()
@@ -171,11 +169,9 @@ def evaluate_ranking(model, test_df, n_items, k=10, seed_lookup=None):
     ):
         true_items = group["item_idx"].values
 
-        # FIX: skip users with no training seed
         if seed_lookup and user_idx not in seed_lookup:
             continue
 
-        # Sample 500 negatives not in true_items
         negatives = np.setdiff1d(
             np.random.choice(n_items, 600, replace=False),
             true_items
@@ -213,6 +209,7 @@ def evaluate_ranking(model, test_df, n_items, k=10, seed_lookup=None):
 
 # =========================
 # UMAP + METRICS PLOT (BONUS)
+# FIX: accepts active_run_id so the plot can be logged inside the NCF run
 # =========================
 def plot_umap_and_metrics(mf_model, ncf_model, metrics):
     try:
@@ -228,12 +225,12 @@ def plot_umap_and_metrics(mf_model, ncf_model, metrics):
     mf_embs  = mf_model.item_emb.weight.detach().cpu().numpy()
     ncf_embs = ncf_model.item_emb_gmf.weight.detach().cpu().numpy()
 
-    n = min(10000, len(mf_embs))
+    n   = min(10000, len(mf_embs))
     idx = np.random.choice(len(mf_embs), n, replace=False)
 
-    reducer  = umap.UMAP(n_components=2, random_state=42, n_jobs=1)
-    mf_2d    = reducer.fit_transform(mf_embs[idx])
-    ncf_2d   = reducer.fit_transform(ncf_embs[idx])
+    reducer = umap.UMAP(n_components=2, random_state=42, n_jobs=1)
+    mf_2d   = reducer.fit_transform(mf_embs[idx])
+    ncf_2d  = reducer.fit_transform(ncf_embs[idx])
 
     fig = plt.figure(figsize=(18, 6))
     gs  = gridspec.GridSpec(1, 3, figure=fig)
@@ -305,20 +302,14 @@ def main():
     test_df   = df.loc[test_idx].reset_index(drop=True)
     train_df  = df.drop(test_idx).reset_index(drop=True)
 
-    # FIX 1: save train_df — required by Phase 9 and Phase 10
     train_df.to_parquet("data/train_df.parquet", index=False)
     test_df.to_parquet("data/test_df.parquet",   index=False)
-
-    # FIX 2: save cleaned_cf_dataset from train only (not full df)
     train_df[["user_id", "item_id", "rating", "timestamp"]].to_parquet(
         "data/cleaned_cf_dataset.parquet", index=False
     )
 
     print(f"  Train: {len(train_df)}  Test: {len(test_df)}")
     print(f"  Test users: {test_df['user_id'].nunique()}")
-    print(f"  Saved → data/train_df.parquet")
-    print(f"  Saved → data/test_df.parquet")
-    print(f"  Saved → data/cleaned_cf_dataset.parquet")
 
     # ---- DataLoader ----
     print("[6.4] Building DataLoader...")
@@ -333,14 +324,12 @@ def main():
     n_users = len(user_map)
     n_items = len(item_map)
 
-    # FIX 3: build seed lookup for ranking eval
-    # seed = last training item per user (second-to-last overall)
     seed_lookup = (
         train_df.sort_values(["user_idx", "timestamp"])
         .groupby("user_idx")["item_idx"]
         .last()
         .to_dict()
-    )  # user_idx -> last train item_idx
+    )
 
     mlflow.set_tracking_uri("mlflow/")
     mlflow.set_experiment("DS11")
@@ -352,8 +341,6 @@ def main():
     with mlflow.start_run(run_name="MF"):
         mf_model  = train_model(mf_model, train_loader, epochs=15)
         mf_rmse   = evaluate_rmse(mf_model, test_df)
-
-        # FIX 3: pass seed_lookup to evaluate_ranking
         mf_recall, mf_ndcg = evaluate_ranking(
             mf_model, test_df, n_items, seed_lookup=seed_lookup
         )
@@ -377,10 +364,20 @@ def main():
     print("\n[6.6] Training NCF...")
     ncf_model = NCF(n_users, n_items, EMB_DIM)
 
+    # ---- Save metrics dict before entering NCF run ----
+    # (needed by plot_umap_and_metrics which runs inside the NCF run)
+    metrics = {
+        "MF":  {
+            "rmse": float(mf_rmse),
+            "recall@10": float(mf_recall),
+            "ndcg@10": float(mf_ndcg)
+        },
+        "NCF": {}   # filled after NCF training below
+    }
+
     with mlflow.start_run(run_name="NCF"):
         ncf_model  = train_model(ncf_model, train_loader, epochs=15)
         ncf_rmse   = evaluate_rmse(ncf_model, test_df)
-
         ncf_recall, ncf_ndcg = evaluate_ranking(
             ncf_model, test_df, n_items, seed_lookup=seed_lookup
         )
@@ -400,28 +397,24 @@ def main():
         torch.save(ncf_model.state_dict(), "models/ncf_model.pth")
         mlflow.log_artifact("models/ncf_model.pth")
 
-    # ================= SAVE METRICS =================
-    print("\nSaving metrics...")
-    metrics = {
-        "MF":  {
-            "rmse": float(mf_rmse),
-            "recall@10": float(mf_recall),
-            "ndcg@10": float(mf_ndcg)
-        },
-        "NCF": {
+        # FIX: generate UMAP plot INSIDE the NCF run so log_artifact works
+        metrics["NCF"] = {
             "rmse": float(ncf_rmse),
             "recall@10": float(ncf_recall),
             "ndcg@10": float(ncf_ndcg)
         }
-    }
+        plot_umap_and_metrics(mf_model, ncf_model, metrics)
+        # FIX: log the UMAP plot to MLflow — was missing before
+        mlflow.log_artifact("outputs/phase6_umap_metrics.png")
 
+    # ================= SAVE METRICS JSON =================
+    print("\nSaving metrics...")
     with open("models/metrics.json", "w") as f:
         json.dump(metrics, f, indent=4)
-
     print("  Saved → models/metrics.json")
 
-    plot_umap_and_metrics(mf_model, ncf_model, metrics)
     print("\nPhase 6 complete.")
+
 
 if __name__ == "__main__":
     main()
