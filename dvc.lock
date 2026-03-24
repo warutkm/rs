@@ -8,6 +8,10 @@ stages:
       md5: bed7e3385a133d0dc633321da64f3e91
       size: 6287
     outs:
+    - path: data/cleaned_cf_dataset.parquet
+      hash: md5
+      md5: f496720dc5ba30b40313fb0b1f5e5fdd
+      size: 2618903
     - path: data/merge_df.csv
       hash: md5
       md5: cacb62bca6d7e973fac02abc6351dc51
@@ -75,6 +79,15 @@ stages:
       hash: md5
       md5: c8587c66c5c80a52980d46d8f15bc5ad
       size: 18374
+    outs:
+    - path: models/cf_recommender.pkl
+      hash: md5
+      md5: 8b3a5f0b864c63590fa7f164166336c2
+      size: 24854170
+    - path: models/product_recommender.pkl
+      hash: md5
+      md5: 87934379324eb4d46673558f52c92fa4
+      size: 5273575
   mf_ncf:
     cmd: python src/06_mf_ncf_pytorch.py
     deps:
@@ -119,18 +132,41 @@ stages:
       md5: 8311c23ab5459983a330a64f59e40ef8
       size: 28240
     outs:
-    - path: embeddings/
+    - path: embeddings/bm25_corpus.json
       hash: md5
-      md5: 2342d19661091e02cc4a514fc42263ac.dir
-      size: 842732188
-      nfiles: 7
+      md5: 888feeb7b11063c10521cfd2a54b52c3
+      size: 136187188
+    - path: embeddings/meta_embeds.npy
+      hash: md5
+      md5: 059af84c72de7aeb9401c48e5904fc49
+      size: 136092800
+    - path: embeddings/meta_item_ids.json
+      hash: md5
+      md5: 72296ff3d086ffa21934bbee3858b3b2
+      size: 575914
+    - path: embeddings/product_vecs.npz
+      hash: md5
+      md5: 52276c4ee6625fc3668ca8f96c6fd03a
+      size: 137865214
+    - path: embeddings/review_embeds.npy
+      hash: md5
+      md5: 0cf519dc6b015b483969991a4661e477
+      size: 431855744
+    - path: embeddings/top_user_embeddings.npy
+      hash: md5
+      md5: 9c4c4d969a3e9110439eb87c7271de41
+      size: 153728
+    - path: embeddings/top_user_ids.json
+      hash: md5
+      md5: f98b7d69322aa4b1fe5d5c96021552a8
+      size: 1600
   als_svdpp:
     cmd: python src/09_als_svdpp.py
     deps:
     - path: data/cleaned_cf_dataset.parquet
       hash: md5
-      md5: 489ceab43994fa12a51b661a78dc2358
-      size: 2409913
+      md5: f496720dc5ba30b40313fb0b1f5e5fdd
+      size: 2618903
     - path: data/item_map.json
       hash: md5
       md5: a34fa8d246d74f864579e2637a0095b3
@@ -146,15 +182,19 @@ stages:
     outs:
     - path: models/als_model.npz
       hash: md5
-      md5: e096385aa35bc0537b10004d22e24702
+      md5: 35af5c531117136d79c8a57a98e24fb4
       size: 14561835
     - path: models/svdpp_model.pkl
       hash: md5
-      md5: 6caaa1d3848c503f01ebfb5663645763
+      md5: 0e66e4a680880b3fb0c477318fd51624
       size: 41110411
   hybrid:
     cmd: python src/08_hybrid_engine.py
     deps:
+    - path: data/train_df.parquet
+      hash: md5
+      md5: 17ef9c0b3955725ad543b380a1c8a983
+      size: 2963352
     - path: embeddings/meta_embeds.npy
       hash: md5
       md5: 059af84c72de7aeb9401c48e5904fc49
@@ -165,8 +205,16 @@ stages:
       size: 431855744
     - path: models/als_model.npz
       hash: md5
-      md5: e096385aa35bc0537b10004d22e24702
+      md5: 35af5c531117136d79c8a57a98e24fb4
       size: 14561835
+    - path: models/apriori_recommender.pkl
+      hash: md5
+      md5: 9c3243820d84a4ef5711bf48349a6a72
+      size: 3982224
+    - path: models/cf_recommender.pkl
+      hash: md5
+      md5: 8b3a5f0b864c63590fa7f164166336c2
+      size: 24854170
     - path: models/mf_model.pth
       hash: md5
       md5: a2305099a793642ecfa2ca7cae78d956
@@ -175,10 +223,18 @@ stages:
       hash: md5
       md5: 8101c15ebd95cc0920bad93cb9f5ff5a
       size: 29163156
+    - path: models/product_recommender.pkl
+      hash: md5
+      md5: 87934379324eb4d46673558f52c92fa4
+      size: 5273575
     - path: models/svdpp_model.pkl
       hash: md5
-      md5: 6caaa1d3848c503f01ebfb5663645763
+      md5: 0e66e4a680880b3fb0c477318fd51624
       size: 41110411
+    - path: models/user_item_matrix.npz
+      hash: md5
+      md5: ac6139c91164f216da237f544a56eb2d
+      size: 339916
     - path: src/08_hybrid_engine.py
       hash: md5
       md5: 5020135dd247b6c6c147bb92be5a425d
@@ -186,5 +242,5 @@ stages:
     outs:
     - path: models/hybrid_recommender.pkl
       hash: md5
-      md5: dc3e749bc791ff031ef90b9d3e278b59
+      md5: 4cfe22651b5bc018ed747e209d4a7701
       size: 317275488

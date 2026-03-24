@@ -34,21 +34,16 @@ models/*
 !models/*.dvc
 
 # =========================
+# OUTPUTS (DVC / GENERATED)
+# =========================
+outputs/*
+!outputs/.gitkeep
+
+# =========================
 # MLFLOW
 # =========================
 mlflow/*
 !mlflow/.gitkeep
-
-# =========================
-# OUTPUTS
-# =========================
-outputs/*
-!outputs/.gitkeep
-outputs/*
-!outputs/apriori_rules.csv
-!outputs/ab_comparison_results.csv
-!outputs/cold_start_delta.csv
-!outputs/ab_comparison_chart.png
 
 # =========================
 # LOGS
@@ -73,9 +68,12 @@ Thumbs.db
 .idea/
 
 # =========================
-# DVC CACHE (OPTIONAL LOCAL)
+# DVC CACHE (LOCAL)
 # =========================
 .dvc/cache/
 dvc_storage/
 
+# =========================
+# MLFLOW DB
+# =========================
 mlflow.db

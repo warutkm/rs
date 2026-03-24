@@ -1,73 +1,98 @@
 stages:
+
   ingest:
     cmd: python src/01_data_ingestion.py
     deps:
-    - src/01_data_ingestion.py
+      - src/01_data_ingestion.py
     outs:
-    - data/merge_df.csv
+      - data/merge_df.csv
+      - data/cleaned_cf_dataset.parquet
+
   preprocess:
     cmd: python src/02_preprocessing.py
     deps:
-    - data/merge_df.csv
-    - src/02_preprocessing.py
+      - data/merge_df.csv
+      - src/02_preprocessing.py
     outs:
-    - data/clean_merge_df.parquet
+      - data/clean_merge_df.parquet
+
   summarize:
     cmd: python src/03_b_t5_summarization.py
     deps:
-    - data/clean_merge_df.parquet
-    - src/03_b_t5_summarization.py
+      - data/clean_merge_df.parquet
+      - src/03_b_t5_summarization.py
     outs:
-    - outputs/final_top500_product_summary.csv
+      - outputs/final_top500_product_summary.csv
+
   apriori:
     cmd: python src/04_apriori_recommender.py
     deps:
-    - data/clean_merge_df.parquet
-    - src/04_apriori_recommender.py
+      - data/clean_merge_df.parquet
+      - src/04_apriori_recommender.py
     outs:
-    - models/apriori_recommender.pkl
+      - outputs/apriori_rules.csv
+      - models/apriori_recommender.pkl
+
   content_cf:
     cmd: python src/05_content_cf_recommender.py
     deps:
-    - data/clean_merge_df.parquet
-    - src/05_content_cf_recommender.py
+      - data/clean_merge_df.parquet
+      - src/05_content_cf_recommender.py
+    outs:
+      - models/product_recommender.pkl
+      - models/cf_recommender.pkl
+
   mf_ncf:
     cmd: python src/06_mf_ncf_pytorch.py
     deps:
-    - data/clean_merge_df.parquet
-    - src/06_mf_ncf_pytorch.py
+      - data/clean_merge_df.parquet
+      - src/06_mf_ncf_pytorch.py
     outs:
-    - models/metrics.json
-    - models/mf_model.pth
-    - models/ncf_model.pth
-    - data/train_df.parquet
-    - data/test_df.parquet
+      - models/metrics.json
+      - models/mf_model.pth
+      - models/ncf_model.pth
+      - data/train_df.parquet
+      - data/test_df.parquet
+
   embed:
     cmd: python src/07_semantic_search.py
     deps:
-    - data/clean_merge_df.parquet
-    - src/07_semantic_search.py
+      - data/clean_merge_df.parquet
+      - src/07_semantic_search.py
     outs:
-    - embeddings/
+      - embeddings/review_embeds.npy
+      - embeddings/meta_embeds.npy
+      - embeddings/meta_item_ids.json
+      - embeddings/product_vecs.npz
+      - embeddings/top_user_embeddings.npy
+      - embeddings/top_user_ids.json
+      - embeddings/bm25_corpus.json
+
   als_svdpp:
     cmd: python src/09_als_svdpp.py
     deps:
-    - data/cleaned_cf_dataset.parquet
-    - data/item_map.json
-    - data/user_map.json
-    - src/09_als_svdpp.py
+      - data/cleaned_cf_dataset.parquet
+      - data/item_map.json
+      - data/user_map.json
+      - src/09_als_svdpp.py
     outs:
-    - models/als_model.npz
-    - models/svdpp_model.pkl
+      - models/als_model.npz
+      - models/svdpp_model.pkl
+
   hybrid:
     cmd: python src/08_hybrid_engine.py
     deps:
-    - embeddings/meta_embeds.npy
-    - embeddings/review_embeds.npy
-    - models/als_model.npz
-    - models/mf_model.pth
-    - models/ncf_model.pth
-    - models/svdpp_model.pkl
-    - src/08_hybrid_engine.py
+      - embeddings/meta_embeds.npy
+      - embeddings/review_embeds.npy
+      - models/als_model.npz
+      - models/mf_model.pth
+      - models/ncf_model.pth
+      - models/svdpp_model.pkl
+      - models/apriori_recommender.pkl
+      - models/product_recommender.pkl
+      - models/cf_recommender.pkl
+      - models/user_item_matrix.npz
+      - data/train_df.parquet
+      - src/08_hybrid_engine.py
     outs:
-    - models/hybrid_recommender.pkl
+      - models/hybrid_recommender.pkl
