@@ -1,30 +1,21 @@
-# Phase 12 — docker-compose.yml
-# Workflow 12.8: service + volume mount models/ and embeddings/ + port 8000:8000
-
-version: "3.9"
-
 services:
   recommender-api:
     build:
-      context: .          # project root (amazon_project/)
+      context: ..              # ✅ go to project root
       dockerfile: api/Dockerfile
 
     container_name: ds11_recommender_api
     ports:
       - "8000:8000"
 
-    # Volume mounts — models and embeddings stay on the host;
-    # only the API code is baked into the image.
-    # Paths inside container must match what main.py expects (/app/...)
     volumes:
-      - ./models:/app/models:ro
-      - ./embeddings:/app/embeddings:ro
-      - ./data:/app/data:ro
+      - ../models:/app/models:ro
+      - ../embeddings:/app/embeddings:ro
+      - ../data:/app/data:ro
 
     environment:
       - PYTHONUNBUFFERED=1
 
-    # Restart automatically on crash (useful for long-running service)
     restart: unless-stopped
 
     healthcheck:
@@ -32,4 +23,4 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s   # give models time to load on first start
+      start_period: 60s

@@ -23,3 +23,6 @@ rank-bm25==0.2.2
 # API utils
 python-multipart==0.0.22
 httpx==0.28.1
+
+mlxtend==0.23.4
+mlflow-skinny==3.10.1

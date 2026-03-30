@@ -74,6 +74,7 @@ state: dict = {
     "bm25_ids":       [],     # list[str]
     "als_model":      None,   # implicit ALS | None
     "model_loaded":   False,
+    "embedder":       None,
 }
 
 
@@ -145,7 +146,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.warning(f"[WARN] ALS model not loaded: {e}")
 
-    # 6. BM25 index  (/search) --------------------------------------------
+    # 6. BM25 index
     try:
         from rank_bm25 import BM25Okapi
         with open(BM25_CORPUS_JSON, "r") as f:
@@ -156,10 +157,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.warning(f"[WARN] BM25 not loaded: {e}")
 
+    # ✅ Step 2: LOAD EMBEDDING MODEL AT STARTUP
+    try:
+        from sentence_transformers import SentenceTransformer
+        log.info("Loading SentenceTransformer at startup…")
+        state["embedder"] = SentenceTransformer("intfloat/e5-base-v2")
+        log.info("[OK] SentenceTransformer loaded")
+    except Exception as e:
+        log.warning(f"[WARN] SentenceTransformer not loaded: {e}")
+
     state["model_loaded"] = state["hybrid"] is not None
     log.info("=== Startup complete ===")
 
-    yield   # ← app serves requests here
+    yield
 
     log.info("=== Shutdown ===")
 
@@ -370,14 +380,9 @@ def similar(item_id: str, top_k: int = Query(10, ge=1, le=100)):
 
 @app.get("/search", response_model=SearchResponse, tags=["search"])
 def search(
-    q:     str = Query(..., min_length=1, description="Search query string"),
+    q:     str = Query(..., min_length=1),
     top_k: int = Query(10, ge=1, le=100),
 ):
-    """
-    Semantic + BM25 hybrid search.
-    Endpoint: GET /search?q=wireless+headphones&top_k=10
-    Weights: 0.55 * embedding + 0.45 * BM25  (Phase 7 spec)
-    """
     product_vecs = state.get("product_vecs")
     if product_vecs is None:
         raise HTTPException(503, "product_vecs not loaded")
@@ -394,21 +399,18 @@ def search(
     item_ids = list(product_vecs.keys())
     mat      = np.array(list(product_vecs.values()), dtype=np.float32)
 
-    # Embedding similarity
-    try:
-        from sentence_transformers import SentenceTransformer
-        if not hasattr(app.state, "_st_model"):
-            log.info("Loading SentenceTransformer for /search …")
-            app.state._st_model = SentenceTransformer("intfloat/e5-base-v2")
-        q_emb    = app.state._st_model.encode(
+    # ✅ Step 3: USE PRELOADED MODEL
+    embedder = state.get("embedder")
+    if embedder is None:
+        log.warning("/search embedding unavailable: embedder not loaded")
+        emb_norm = np.zeros(len(item_ids))
+    else:
+        q_emb = embedder.encode(
             [q], normalize_embeddings=True
         )[0].astype(np.float32)
         emb_norm = _minmax((mat @ q_emb).astype(np.float64))
-    except Exception as e:
-        log.warning(f"/search embedding unavailable: {e}")
-        emb_norm = np.zeros(len(item_ids))
 
-    # BM25
+    # BM25 (UNCHANGED)
     bm25_model = state.get("bm25_model")
     bm25_ids   = state.get("bm25_ids", [])
     if bm25_model is not None:
@@ -419,7 +421,7 @@ def search(
     else:
         bm25_align = np.zeros(len(item_ids))
 
-    # Fuse
+    # Fuse (UNCHANGED)
     hybrid_scores = HYBRID_EMB_W * emb_norm + HYBRID_BM25_W * bm25_align
     order  = np.argsort(-hybrid_scores)
     above  = [i for i in order if hybrid_scores[i] >= HYBRID_THRESH]

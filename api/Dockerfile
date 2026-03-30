@@ -15,8 +15,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python dependencies first (layer-cached unless requirements change)
-COPY api/requirements.txt ./requirements.txt
+COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
+
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/e5-base-v2')"
 
 # Copy project source so HybridRecommender imports work
 # (08_hybrid_engine imports 04_ and 05_ via importlib)
