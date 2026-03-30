@@ -66,8 +66,8 @@ stages:
       size: 3982224
     - path: outputs/apriori_rules.csv
       hash: md5
-      md5: aa53a1d0a663ace9689e19c756d4f3f0
-      size: 344050
+      md5: cf208991374a05c03dcd6391e3a82167
+      size: 380674
   content_cf:
     cmd: python src/05_content_cf_recommender.py
     deps:
