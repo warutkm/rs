@@ -1,24 +1,25 @@
-pandas
-numpy
-scikit-learn
-tqdm
-dill
-wordcloud
+fastapi==0.135.1
+uvicorn[standard]==0.42.0
+pydantic==2.12.5
 
-torch
-transformers
-sentence-transformers
-datasets
-rank_bm25
+# Core ML
+numpy==1.26.4
+scipy==1.15.2
+scikit-learn==1.7.2
+pandas==2.3.3
+implicit==0.7.2
+dill==0.4.1
 
-mlxtend
+# Deep Learning (CUDA-compatible)
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
 
-implicit
-scikit-surprise
+# NLP / Search
+sentence-transformers==5.3.0
+transformers==4.41.2
+rank-bm25==0.2.2
 
-mlflow
-dvc
-
-fastapi
-uvicorn
-python-multipart
+# API utils
+python-multipart==0.0.22
+httpx==0.28.1
