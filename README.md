@@ -9,7 +9,7 @@ This project implements a **production-grade hybrid recommender system** that co
 
 The system is designed to handle **cold-start scenarios**, scale efficiently, and be deployable via **FastAPI + Docker**, with full **MLOps integration (MLflow + DVC)**.
 
-Dataset: Amazon Reviews 2023 (Video_Games, Musical_Instruments, Software) fileciteturn0file0
+Dataset: Amazon Reviews 2023 (Video_Games, Musical_Instruments, Software) 
 
 ---
 
@@ -64,7 +64,7 @@ Only users with ≥5 interactions are retained to improve CF learning quality.
 Using 3 related categories improves:
 - CF overlap
 - NLP richness
-- Cross-sell patterns fileciteturn0file0
+- Cross-sell patterns 
 
 ---
 
@@ -229,7 +229,7 @@ A/B comparison includes:
 
 - Hybrid Recommendation API
 - A/B Comparison Notebook
-- MLflow Experiment Report fileciteturn0file1
+- MLflow Experiment Report 
 
 ---
 
