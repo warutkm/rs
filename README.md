@@ -28,13 +28,21 @@ Dataset → DVC Pipeline → Features → Models (Content + CF + Embeddings) →
 
 ---
 
-## Model Performance
+## Model Performance (Update from MLflow)
 
-| Model  | Recall@10 | NDCG@10 |
-|--------|----------|--------|
-| ALS    | 0.28     | 0.26   |
-| MF     | 0.31     | 0.29   |
-| Hybrid | 0.41     | 0.38   |
+Run MLflow UI:
+```bash
+mlflow ui --backend-store-uri mlflow/
+```
+
+Then replace values below with your actual results:
+
+| Model  | RMSE | Recall@10 | NDCG@10 | Precision@10 |
+|--------|------|----------|--------|-------------|
+| ALS    |      |          |        |             |
+| MF     |      |          |        |             |
+| NCF    |      |          |        |             |
+| Hybrid |      |          |        |             |
 
 ---
 
