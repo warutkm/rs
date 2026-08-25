@@ -31,5 +31,8 @@ tqdm==4.67.1
 python-multipart==0.0.22
 httpx==0.28.1
 
+# Vector DB
+qdrant-client==1.19.0
+
 mlxtend==0.23.4
 mlflow-skinny==3.10.1

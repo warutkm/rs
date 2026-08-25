@@ -383,7 +383,7 @@ them get lost either. Revisit at the phase noted, or opportunistically if you're
 
 - [x] `GEMINI.md` + `PROJECT_MANIFEST.md` committed
 - [ ] GitHub Actions retrain workflow runs `dvc repro` end to end (and `/admin/retrain` works on demand)
-- [ ] Qdrant populated, ANN search returns sane neighbors
+- [x] Qdrant populated, ANN search returns sane neighbors
 - [ ] `LGBMRanker` trained, logged to MLflow as `Ranker`
 - [ ] LLM explanations cached in Redis, cache-hit rate visible in `/metrics`
 - [ ] FastAPI v2 endpoints pass `api/test_api.py` (extend v1's tests)

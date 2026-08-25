@@ -43,6 +43,7 @@ ITEM_MAP_PATH       = os.path.join(DATA_DIR, "item_map.json")
 # -------------------------
 REVIEW_EMBEDS_PATH  = os.path.join(EMBEDDINGS_DIR, "review_embeds.npy")
 META_EMBEDS_PATH    = os.path.join(EMBEDDINGS_DIR, "meta_embeds.npy")
+META_ITEM_IDS_PATH  = os.path.join(EMBEDDINGS_DIR, "meta_item_ids.json")
 
 # -------------------------
 # MODELS
@@ -71,7 +72,16 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # MLflow CONFIG
 # =========================
 MLFLOW_TRACKING_URI = "file:./mlflow"
-MLFLOW_EXPERIMENT   = "DS11"
+MLFLOW_EXPERIMENT   = "DS11-v2"
+
+# =========================
+# QDRANT CONFIG (v2)
+# =========================
+QDRANT_HOST            = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT            = int(os.getenv("QDRANT_PORT", "6333"))
+QDRANT_URL             = os.getenv("QDRANT_URL", None)
+QDRANT_API_KEY         = os.getenv("QDRANT_API_KEY", None)
+QDRANT_COLLECTION_NAME = os.getenv("QDRANT_COLLECTION_NAME", "products")
 
 # =========================
 # HUGGINGFACE CONFIG
@@ -89,6 +99,8 @@ RANDOM_STATE = 42
 LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
+PIPELINE_DIR   = os.path.join(BASE_DIR, "pipeline")
+
 
 # =========================
 # CREATE DIRS (STANDARDIZED)
@@ -102,6 +114,7 @@ def create_dirs():
         MLFLOW_DIR,
         SRC_DIR,
         API_DIR,
+        PIPELINE_DIR,
     ]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
