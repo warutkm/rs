@@ -103,6 +103,13 @@ PIPELINE_DIR   = os.path.join(BASE_DIR, "pipeline")
 
 
 # =========================
+# ADMIN & RETRAIN CONFIG (v2)
+# =========================
+ADMIN_API_KEY    = os.getenv("ADMIN_API_KEY", "ds11_admin_secret_key_v2")
+LOGS_DIR         = os.path.join(BASE_DIR, "logs")
+RETRAIN_LOG_PATH = os.path.join(LOGS_DIR, "dvc_repro.log")
+
+# =========================
 # CREATE DIRS (STANDARDIZED)
 # =========================
 def create_dirs():
@@ -115,6 +122,7 @@ def create_dirs():
         SRC_DIR,
         API_DIR,
         PIPELINE_DIR,
+        LOGS_DIR,
     ]
     for d in dirs:
         os.makedirs(d, exist_ok=True)

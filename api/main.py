@@ -20,10 +20,10 @@ import sys
 import json
 import logging
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 
 import numpy as np
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Header, Depends
 
 # ---------------------------------------------------------------------------
 # Path setup — works whether uvicorn is run from E:\rs or E:\rs\api
@@ -33,9 +33,12 @@ BASE_DIR = os.path.abspath(os.path.join(API_DIR, "..")) # .../rs/
 SRC_DIR  = os.path.join(BASE_DIR, "src")                # .../rs/src/
 
 # schemas.py lives next to main.py in api/ — must be on path first
-for _p in (API_DIR, SRC_DIR):
+for _p in (BASE_DIR, API_DIR, SRC_DIR):
     if _p not in sys.path:
         sys.path.insert(0, _p)
+
+from config import ADMIN_API_KEY
+from retrain_manager import RetrainManager
 
 # schemas is now importable regardless of working directory
 from schemas import (
@@ -43,6 +46,7 @@ from schemas import (
     SimilarResponse,
     SearchResponse, SearchResult,
     HealthResponse,
+    AdminRetrainRequest, AdminRetrainResponse, AdminRetrainStatusResponse,
 )
 
 # ---------------------------------------------------------------------------
@@ -457,3 +461,66 @@ def health():
         model_loaded = state["model_loaded"],
         n_items      = len(pv) if pv else None,
     )
+
+
+# =============================================================================
+# ADMIN AUTH & RETRAIN (v2)
+# =============================================================================
+
+retrain_manager = RetrainManager()
+
+
+def verify_admin_key(
+    x_admin_api_key: Optional[str] = Header(None, alias="X-Admin-API-Key"),
+    x_api_key:       Optional[str] = Header(None, alias="X-API-Key"),
+    authorization:   Optional[str] = Header(None, alias="Authorization"),
+) -> str:
+    admin_key = os.getenv("ADMIN_API_KEY", ADMIN_API_KEY)
+    token = None
+    if authorization:
+        if authorization.startswith("Bearer "):
+            token = authorization.split(" ", 1)[1].strip()
+        else:
+            token = authorization.strip()
+
+    provided_key = x_admin_api_key or x_api_key or token
+    if not provided_key or provided_key != admin_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized: Invalid or missing admin API key.",
+        )
+    return provided_key
+
+
+@app.post("/admin/retrain", response_model=AdminRetrainResponse, tags=["admin"])
+def trigger_retrain(
+    req: AdminRetrainRequest = AdminRetrainRequest(),
+    _: str = Depends(verify_admin_key),
+):
+    """
+    Trigger the DVC retraining pipeline asynchronously via subprocess.
+    Requires ADMIN_API_KEY (via X-Admin-API-Key, X-API-Key, or Authorization header).
+    Returns 409 Conflict if another retrain job is already running.
+    """
+    res = retrain_manager.trigger(force=req.force, targets=req.targets)
+    if not res["success"]:
+        raise HTTPException(status_code=409, detail=res["message"])
+    return AdminRetrainResponse(
+        status     = res["status"],
+        message    = res["message"],
+        job_id     = res["job_id"],
+        started_at = res["started_at"],
+    )
+
+
+@app.get("/admin/retrain/status", response_model=AdminRetrainStatusResponse, tags=["admin"])
+def retrain_status(
+    _: str = Depends(verify_admin_key),
+):
+    """
+    Get the status of the current or most recent retrain job and recent log tail.
+    Requires ADMIN_API_KEY.
+    """
+    status_data = retrain_manager.get_status()
+    return AdminRetrainStatusResponse(**status_data)
+

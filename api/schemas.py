@@ -80,3 +80,29 @@ class HealthResponse(BaseModel):
     status:       str
     model_loaded: bool
     n_items:      Optional[int] = None
+
+
+# =============================================================================
+# POST /admin/retrain & GET /admin/retrain/status
+# =============================================================================
+
+class AdminRetrainRequest(BaseModel):
+    force:   bool                  = Field(False, description="Force re-execution of all DVC stages (--force)")
+    targets: Optional[List[str]]   = Field(None,  description="Optional list of specific DVC stage targets to reproduce")
+
+
+class AdminRetrainResponse(BaseModel):
+    status:     str
+    message:    str
+    job_id:     Optional[str] = None
+    started_at: Optional[str] = None
+
+
+class AdminRetrainStatusResponse(BaseModel):
+    status:      str
+    job_id:      Optional[str] = None
+    started_at:  Optional[str] = None
+    finished_at: Optional[str] = None
+    return_code: Optional[int] = None
+    log_tail:    Optional[str] = None
+
