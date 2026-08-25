@@ -16,7 +16,8 @@ WORKDIR /app
 
 # Install Python dependencies first (layer-cached unless requirements change)
 COPY requirements.txt ./requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --extra-index-url https://download.pytorch.org/whl/cpu --default-timeout=1000 --retries 10 -r requirements.txt
 
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/e5-base-v2')"
 

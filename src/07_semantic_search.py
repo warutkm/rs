@@ -105,10 +105,6 @@ def load_data() -> pd.DataFrame:
     if _args.parquet:
         DATA_PATH = Path(_args.parquet)
 
-    # Priority 2: interactive upload (notebook cell only, not !python)
-    elif ENV == "colab" and not DATA_PATH.exists():
-        DATA_PATH = colab_upload_parquet()
-
     if not DATA_PATH.exists():
         raise FileNotFoundError(
             f"{DATA_PATH} not found.\n"

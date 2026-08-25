@@ -8,7 +8,6 @@ import pandas as pd
 import scipy.sparse as sp
 import mlflow
 
-from scipy.sparse import csr_matrix
 from implicit.als import AlternatingLeastSquares
 from surprise import Dataset, Reader, SVDpp
 from surprise.model_selection import train_test_split
@@ -21,110 +20,12 @@ def create_dirs():
     os.makedirs("models",  exist_ok=True)
     os.makedirs("outputs", exist_ok=True)
 
-create_dirs()
-
-# =========================
-# MLFLOW SETUP
-# =========================
-mlflow.set_tracking_uri("mlflow/")
-mlflow.set_experiment("DS11")
-
-# =========================
-# LOAD DATA
-# FIX: use train_df only — not full dataset (prevents leakage)
-# =========================
-print("Loading train dataset...")
-df = pd.read_parquet("data/train_df.parquet")     # FIX: was cleaned_cf_dataset
-df = df.dropna(subset=["user_id", "item_id", "rating"])
-print(f"Train interactions: {len(df)}")
-
-# =========================
-# LOAD MAPS
-# =========================
-with open("data/user_map.json", "r") as f:
-    user_map = json.load(f)
-
-with open("data/item_map.json", "r") as f:
-    item_map = json.load(f)
-
-user_map = {k: int(v) for k, v in user_map.items()}
-item_map = {k: int(v) for k, v in item_map.items()}
-
-inv_item_map = {int(v): k for k, v in item_map.items()}
-
-# =========================
-# ALIGN DF WITH MAPS
-# =========================
-df = df[df["user_id"].isin(user_map) & df["item_id"].isin(item_map)]
-df["user_idx"] = df["user_id"].map(user_map).astype(int)
-df["item_idx"] = df["item_id"].map(item_map).astype(int)
-
-print(f"Aligned interactions: {len(df)}")
-print(f"Users: {df['user_idx'].nunique()}  Items: {df['item_idx'].nunique()}")
-
-# =========================
-# LOAD TEST + TRAIN SPLIT
-# FIX: load train_df for seed lookup, test_df for ground truth
-# =========================
-test_df  = pd.read_parquet("data/test_df.parquet")
-train_df = pd.read_parquet("data/train_df.parquet")
-
-# FIX: seed lookup — last training item per user
-seed_lookup = (
-    train_df.sort_values("timestamp")
-    .groupby("user_id")["item_id"]
-    .last()
-    .to_dict()
-)
-
-# Ground truth — test item per user
-test_user_items = test_df.groupby("user_id")["item_id"].apply(list).to_dict()
-
-# =========================
-# LOAD MATRIX (built by Phase 8)
-# =========================
-print("\nLoading user_item_matrix from Phase 8...")
-import scipy.sparse as sp
-
-user_item_matrix = sp.load_npz("models/user_item_matrix.npz")
-item_user_matrix = user_item_matrix.T.tocsr()
-
-print(f"user_item_matrix: {user_item_matrix.shape}")   # (12569, 44301)
-print(f"item_user_matrix: {item_user_matrix.shape}")   # (44301, 12569)
-
-# ALS trains directly on item_user_matrix loaded above
-
-# =========================
-# TRAIN ALS
-# =========================
-print("\nTraining ALS...")
-
-als_model = AlternatingLeastSquares(
-    factors       = 64,
-    iterations    = 20,
-    regularization= 0.1,
-    use_gpu       = False
-)
-
-# FIX: implicit expects item_user_matrix for fit()
-# but user_item_matrix for recommend()
-# FIX: pass user_item_matrix to fit() — implicit 0.7.x expects (n_users, n_items)
-als_model.fit(user_item_matrix)
-
-print(f"user_factors: {als_model.user_factors.shape}")
-print(f"item_factors: {als_model.item_factors.shape}")
-
-# Sanity check
-sample_ids, sample_scores = als_model.recommend(
-    0, user_item_matrix[0], N=5, filter_already_liked_items=True
-)
-print("Sample ALS recs:", list(zip(sample_ids.tolist(), sample_scores.tolist())))
 
 # =========================
 # ALS EVALUATION
-# FIX: use seed from train, ground truth from test
 # =========================
-def recall_at_k_als(model, k=10):
+def recall_at_k_als(model, user_item_matrix, test_user_items, user_map,
+                    inv_item_map, seed_lookup, k=10):
     recalls = []
     test_users = list(test_user_items.keys())
     sampled    = np.random.choice(
@@ -136,7 +37,6 @@ def recall_at_k_als(model, k=10):
         if user_idx is None:
             continue
 
-        # FIX: skip users with no training seed
         if user_id not in seed_lookup:
             continue
 
@@ -147,7 +47,7 @@ def recall_at_k_als(model, k=10):
                 N=k,
                 filter_already_liked_items=True
             )
-        except Exception as e:
+        except Exception:
             continue
 
         if len(item_indices) == 0:
@@ -156,7 +56,6 @@ def recall_at_k_als(model, k=10):
         rec_items  = [inv_item_map.get(int(i)) for i in item_indices]
         rec_items  = [r for r in rec_items if r is not None]
 
-        # FIX: ground truth from test_df, not from same split
         true_items = test_user_items.get(user_id, [])
         if not true_items:
             continue
@@ -167,7 +66,8 @@ def recall_at_k_als(model, k=10):
     return float(np.mean(recalls)) if recalls else 0.0
 
 
-def ndcg_at_k_als(model, k=10):
+def ndcg_at_k_als(model, user_item_matrix, test_user_items, user_map,
+                  inv_item_map, seed_lookup, k=10):
     ndcgs = []
     test_users = list(test_user_items.keys())
     sampled    = np.random.choice(
@@ -189,7 +89,7 @@ def ndcg_at_k_als(model, k=10):
                 N=k,
                 filter_already_liked_items=True
             )
-        except Exception as e:
+        except Exception:
             continue
 
         if len(item_indices) == 0:
@@ -223,7 +123,7 @@ def als_rmse(model, df_imp, n_samples=20000):
             )
             preds.append(pred)
             actuals.append(row.confidence)
-        except:
+        except Exception:
             continue
     if not preds:
         return 0.0
@@ -232,84 +132,195 @@ def als_rmse(model, df_imp, n_samples=20000):
     )))
 
 
-# Build df_implicit from df for rmse calculation
-df_implicit = df.copy()
-df_implicit["confidence"] = df_implicit["rating"].astype(np.float32) / 5.0
-
-# RUN EVALUATION
-print("\nEvaluating ALS...")
-als_recall   = recall_at_k_als(als_model)
-als_ndcg     = ndcg_at_k_als(als_model)
-als_rmse_val = als_rmse(als_model, df_implicit)
-
-print(f"ALS RMSE: {als_rmse_val:.4f}")
-print(f"ALS Recall@10: {als_recall:.4f}")
-print(f"ALS NDCG@10:   {als_ndcg:.4f}")
-
 # =========================
-# LOG ALS TO MLFLOW
+# MAIN
 # =========================
-with mlflow.start_run(run_name="ALS"):
-    mlflow.log_param("factors",         64)
-    mlflow.log_param("iterations",      20)
-    mlflow.log_param("regularization",  0.1)
-    mlflow.log_param("confidence_scale","rating/5.0")
-    mlflow.log_param("train_data",      "train_df only (leave-one-out split)")
+def main():
+    create_dirs()
 
-    mlflow.log_metric("rmse",         als_rmse_val)
-    mlflow.log_metric("recall_at_10", als_recall)
-    mlflow.log_metric("ndcg_at_10",   als_ndcg)
+    # MLFLOW SETUP
+    mlflow.set_tracking_uri("mlflow/")
+    mlflow.set_experiment("DS11")
 
-    als_model.save("models/als_model.npz")
-    mlflow.log_artifact("models/als_model.npz")
-    mlflow.log_artifact("models/user_item_matrix.npz")
+    # =========================
+    # LOAD DATA
+    # =========================
+    print("Loading train dataset...")
+    df = pd.read_parquet("data/train_df.parquet")
+    df = df.dropna(subset=["user_id", "item_id", "rating"])
+    print(f"Train interactions: {len(df)}")
 
-print("ALS DONE")
+    # =========================
+    # LOAD MAPS
+    # =========================
+    with open("data/user_map.json", "r") as f:
+        user_map = json.load(f)
 
-# =========================
-# TRAIN SVD++
-# FIX: use train_df only — not full df
-# =========================
-print("\nTraining SVD++...")
+    with open("data/item_map.json", "r") as f:
+        item_map = json.load(f)
 
-reader = Reader(rating_scale=(
-    df["rating"].min(), df["rating"].max()
-))
-surprise_data = Dataset.load_from_df(
-    df[["user_id", "item_id", "rating"]], reader
-)
+    user_map = {k: int(v) for k, v in user_map.items()}
+    item_map = {k: int(v) for k, v in item_map.items()}
 
-# FIX: use full train_df for SVD++ — internal split for validation only
-trainset, testset = train_test_split(
-    surprise_data, test_size=0.1, random_state=42
-)
+    inv_item_map = {int(v): k for k, v in item_map.items()}
 
-svdpp_model = SVDpp(n_factors=50, n_epochs=20)
-svdpp_model.fit(trainset)
+    # =========================
+    # ALIGN DF WITH MAPS
+    # =========================
+    df = df[df["user_id"].isin(user_map) & df["item_id"].isin(item_map)]
+    df["user_idx"] = df["user_id"].map(user_map).astype(int)
+    df["item_idx"] = df["item_id"].map(item_map).astype(int)
 
-predictions  = svdpp_model.test(testset)
-svd_rmse_val = rmse(predictions)
+    print(f"Aligned interactions: {len(df)}")
+    print(f"Users: {df['user_idx'].nunique()}  Items: {df['item_idx'].nunique()}")
 
-print(f"SVD++ RMSE: {svd_rmse_val:.4f}")
+    # =========================
+    # LOAD TEST + TRAIN SPLIT
+    # =========================
+    test_df  = pd.read_parquet("data/test_df.parquet")
+    train_df = pd.read_parquet("data/train_df.parquet")
 
-# =========================
-# LOG SVD++ TO MLFLOW
-# =========================
-with mlflow.start_run(run_name="SVDpp"):
-    mlflow.log_param("n_factors",  50)
-    mlflow.log_param("n_epochs",   20)
-    mlflow.log_param("train_data", "train_df only (leave-one-out split)")
+    # Seed lookup — last training item per user
+    seed_lookup = (
+        train_df.sort_values("timestamp")
+        .groupby("user_id")["item_id"]
+        .last()
+        .to_dict()
+    )
 
-    mlflow.log_metric("rmse", svd_rmse_val)
+    # Ground truth — test item per user
+    test_user_items = test_df.groupby("user_id")["item_id"].apply(list).to_dict()
 
-    with open("models/svdpp_model.pkl", "wb") as f:
-        pickle.dump(svdpp_model, f)
+    # =========================
+    # BUILD USER-ITEM MATRIX
+    # (self-contained — no dependency on Phase 8's artifact)
+    # =========================
+    print("\nBuilding user_item_matrix from train data...")
 
-    mlflow.log_artifact("models/svdpp_model.pkl")
+    df["confidence"] = df["rating"].astype(np.float32) / 5.0
 
-print("SVD++ DONE")
-print("\nPhase 9 complete.")
-print("Outputs:")
-print("  models/als_model.npz")
-print("  models/svdpp_model.pkl")
-print("  models/user_item_matrix.npz")
+    n_users = len(user_map)
+    n_items = len(item_map)
+
+    item_user_matrix = sp.csr_matrix(
+        (df["confidence"].values,
+         (df["item_idx"].values, df["user_idx"].values)),
+        shape=(n_items, n_users)
+    )
+    user_item_matrix = item_user_matrix.T.tocsr()
+
+    sp.save_npz("models/user_item_matrix.npz", user_item_matrix)
+    print(f"  user_item_matrix: {user_item_matrix.shape}  nnz={user_item_matrix.nnz}")
+    print(f"  Saved → models/user_item_matrix.npz")
+
+    # =========================
+    # TRAIN ALS
+    # =========================
+    print("\nTraining ALS...")
+
+    als_model = AlternatingLeastSquares(
+        factors       = 64,
+        iterations    = 20,
+        regularization= 0.1,
+        use_gpu       = False
+    )
+
+    # implicit 0.7.x expects (n_users, n_items) for fit()
+    als_model.fit(user_item_matrix)
+
+    print(f"user_factors: {als_model.user_factors.shape}")
+    print(f"item_factors: {als_model.item_factors.shape}")
+
+    # Sanity check
+    sample_ids, sample_scores = als_model.recommend(
+        0, user_item_matrix[0], N=5, filter_already_liked_items=True
+    )
+    print("Sample ALS recs:", list(zip(sample_ids.tolist(), sample_scores.tolist())))
+
+    # =========================
+    # ALS EVALUATION
+    # =========================
+    # Build df_implicit for rmse calculation
+    df_implicit = df.copy()
+
+    print("\nEvaluating ALS...")
+    als_recall   = recall_at_k_als(als_model, user_item_matrix, test_user_items,
+                                   user_map, inv_item_map, seed_lookup)
+    als_ndcg     = ndcg_at_k_als(als_model, user_item_matrix, test_user_items,
+                                 user_map, inv_item_map, seed_lookup)
+    als_rmse_val = als_rmse(als_model, df_implicit)
+
+    print(f"ALS RMSE: {als_rmse_val:.4f}")
+    print(f"ALS Recall@10: {als_recall:.4f}")
+    print(f"ALS NDCG@10:   {als_ndcg:.4f}")
+
+    # =========================
+    # LOG ALS TO MLFLOW
+    # =========================
+    with mlflow.start_run(run_name="ALS"):
+        mlflow.log_param("factors",         64)
+        mlflow.log_param("iterations",      20)
+        mlflow.log_param("regularization",  0.1)
+        mlflow.log_param("confidence_scale","rating/5.0")
+        mlflow.log_param("train_data",      "train_df only (leave-one-out split)")
+
+        mlflow.log_metric("rmse",         als_rmse_val)
+        mlflow.log_metric("recall_at_10", als_recall)
+        mlflow.log_metric("ndcg_at_10",   als_ndcg)
+
+        als_model.save("models/als_model.npz")
+        mlflow.log_artifact("models/als_model.npz")
+        mlflow.log_artifact("models/user_item_matrix.npz")
+
+    print("ALS DONE")
+
+    # =========================
+    # TRAIN SVD++
+    # =========================
+    print("\nTraining SVD++...")
+
+    reader = Reader(rating_scale=(
+        df["rating"].min(), df["rating"].max()
+    ))
+    surprise_data = Dataset.load_from_df(
+        df[["user_id", "item_id", "rating"]], reader
+    )
+
+    # Internal split for validation only
+    trainset, testset = train_test_split(
+        surprise_data, test_size=0.1, random_state=42
+    )
+
+    svdpp_model = SVDpp(n_factors=50, n_epochs=20)
+    svdpp_model.fit(trainset)
+
+    predictions  = svdpp_model.test(testset)
+    svd_rmse_val = rmse(predictions)
+
+    print(f"SVD++ RMSE: {svd_rmse_val:.4f}")
+
+    # =========================
+    # LOG SVD++ TO MLFLOW
+    # =========================
+    with mlflow.start_run(run_name="SVDpp"):
+        mlflow.log_param("n_factors",  50)
+        mlflow.log_param("n_epochs",   20)
+        mlflow.log_param("train_data", "train_df only (leave-one-out split)")
+
+        mlflow.log_metric("rmse", svd_rmse_val)
+
+        with open("models/svdpp_model.pkl", "wb") as f:
+            pickle.dump(svdpp_model, f)
+
+        mlflow.log_artifact("models/svdpp_model.pkl")
+
+    print("SVD++ DONE")
+    print("\nPhase 9 complete.")
+    print("Outputs:")
+    print("  models/als_model.npz")
+    print("  models/svdpp_model.pkl")
+    print("  models/user_item_matrix.npz")
+
+
+if __name__ == "__main__":
+    main()

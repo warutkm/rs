@@ -9,16 +9,23 @@ scikit-learn==1.7.2
 pandas==2.3.3
 implicit==0.7.2
 dill==0.4.1
+scikit-surprise==1.1.4
 
-# Deep Learning (CUDA-compatible)
+# Deep Learning
 torch==2.2.2
-torchvision==0.17.2
-torchaudio==2.2.2
 
 # NLP / Search
 sentence-transformers==5.3.0
 transformers==4.41.2
 rank-bm25==0.2.2
+
+# Data / Viz / Pipeline deps
+pyarrow==17.0.0
+matplotlib==3.10.3
+seaborn==0.13.2
+wordcloud==1.9.4
+requests==2.32.3
+tqdm==4.67.1
 
 # API utils
 python-multipart==0.0.22

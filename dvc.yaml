@@ -71,13 +71,15 @@ stages:
   als_svdpp:
     cmd: python src/09_als_svdpp.py
     deps:
-      - data/cleaned_cf_dataset.parquet
+      - data/train_df.parquet
+      - data/test_df.parquet
       - data/item_map.json
       - data/user_map.json
       - src/09_als_svdpp.py
     outs:
       - models/als_model.npz
       - models/svdpp_model.pkl
+      - models/user_item_matrix.npz
 
   hybrid:
     cmd: python src/08_hybrid_engine.py

@@ -448,35 +448,9 @@ def main():
     print(f"  ProductRecommender  ✓")
     print(f"  CFRecommender       ✓  known_users={len(cf_rec.user_map):,}")
 
-    print("\n[3b] Building user_item_matrix from train_df ...")
-
-    with open(os.path.join(DATA_DIR, "user_map.json"), "r") as f:
-        user_map = {k: int(v) for k, v in json.load(f).items()}
-    with open(os.path.join(DATA_DIR, "item_map.json"), "r") as f:
-        item_map = {k: int(v) for k, v in json.load(f).items()}
-
-    train_aligned = train_df[
-        train_df["user_id"].isin(user_map) &
-        train_df["item_id"].isin(item_map)
-    ].copy()
-
-    train_aligned["user_idx"]   = train_aligned["user_id"].map(user_map).astype(int)
-    train_aligned["item_idx"]   = train_aligned["item_id"].map(item_map).astype(int)
-    train_aligned["confidence"] = train_aligned["rating"].astype(np.float32) / 5.0
-
-    rows = train_aligned["item_idx"].values
-    cols = train_aligned["user_idx"].values
-    data = train_aligned["confidence"].astype(np.float32).values
-
-    n_users = len(user_map)
-    n_items = len(item_map)
-
-    item_user_matrix = sp.csr_matrix((data, (rows, cols)), shape=(n_items, n_users))
-    user_item_matrix = item_user_matrix.T.tocsr()
-
-    sp.save_npz(USER_ITEM_NPZ, user_item_matrix)
+    print("\n[3b] Loading user_item_matrix from models/user_item_matrix.npz ...")
+    user_item_matrix = sp.load_npz(USER_ITEM_NPZ)
     print(f"  user_item_matrix: {user_item_matrix.shape}  nnz={user_item_matrix.nnz}")
-    print(f"  Saved → {USER_ITEM_NPZ}")
 
     print("\n[4/6] Building HybridRecommender ...")
     hybrid = HybridRecommender(

@@ -83,6 +83,12 @@ HF_DATASET_NAME = "McAuley-Lab/Amazon-Reviews-2023"
 # =========================
 RANDOM_STATE = 42
 
+# =========================
+# LLM CONFIG (v2)
+# =========================
+LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
 
 # =========================
 # CREATE DIRS (STANDARDIZED)

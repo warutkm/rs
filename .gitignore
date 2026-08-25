@@ -7,13 +7,16 @@ __pycache__/
 *.pyd
 
 # =========================
-# ENVIRONMENTS
+# ENVIRONMENTS & SECRETS
 # =========================
 env/
 venv/
 rs_env/
 .conda/
 .venv/
+.env
+.env.*
+.env.local
 
 # =========================
 # DATA (DVC TRACKED)
