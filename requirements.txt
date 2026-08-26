@@ -10,6 +10,7 @@ pandas==2.3.3
 implicit==0.7.2
 dill==0.4.1
 scikit-surprise==1.1.4
+lightgbm==4.7.0
 
 # Deep Learning
 torch==2.2.2

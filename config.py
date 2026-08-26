@@ -57,6 +57,24 @@ HYBRID_MODEL_PATH   = os.path.join(MODELS_DIR, "hybrid_recommender.pkl")
 SVM_MODEL_PATH      = os.path.join(MODELS_DIR, "svm_model.pkl")
 VECTORIZER_PATH     = os.path.join(MODELS_DIR, "svm_vectorizer.pkl")
 
+RANKER_TRAIN_PATH   = os.path.join(DATA_DIR, "ranker_train.parquet")
+RANKER_TEST_PATH    = os.path.join(DATA_DIR, "ranker_test.parquet")
+LGBM_RANKER_PATH    = os.path.join(MODELS_DIR, "lgbm_ranker.txt")
+LGBM_RANKER_PKL_PATH= os.path.join(MODELS_DIR, "lgbm_ranker.pkl")
+
+RANKER_FEATURES     = [
+    "als_score",
+    "svdpp_score",
+    "mf_score",
+    "ncf_score",
+    "content_score",
+    "apriori_lift",
+    "price_score",
+    "recency",
+    "popularity",
+    "helpful_votes",
+]
+
 # -------------------------
 # OUTPUTS
 # -------------------------

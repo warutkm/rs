@@ -385,7 +385,7 @@ them get lost either. Revisit at the phase noted, or opportunistically if you're
 - [x] GitHub Actions retrain workflow runs `dvc repro` end to end (and `/admin/retrain` works on demand)
 - [x] Qdrant populated, ANN search returns sane neighbors
 - [x] Model artifacts regenerated (03–06, 09) and logged to MLflow experiment `DS11-v2`
-- [ ] `LGBMRanker` trained, logged to MLflow as `Ranker`
+- [x] `LGBMRanker` trained, logged to MLflow as `Ranker`
 - [ ] LLM explanations cached in Redis, cache-hit rate visible in `/metrics`
 - [ ] FastAPI v2 endpoints pass `api/test_api.py` (extend v1's tests)
 - [ ] Next.js frontend hits the live API, shows personalization changing per demo user

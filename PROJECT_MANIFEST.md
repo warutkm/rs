@@ -25,7 +25,9 @@ amazon_project/
 │   ├── 08_hybrid_engine.py            # v1 HybridRecommender (content + CF + Apriori union)
 │   ├── 09_als_svdpp.py                # Implicit ALS & Surprise SVD++ models
 │   ├── 10_ab_comparison.ipynb         # System evaluation & A/B offline metric comparisons
-│   └── 11_mlflow_report.ipynb         # MLflow metric leaderboard & visual reporting
+│   ├── 11_mlflow_report.ipynb         # MLflow metric leaderboard & visual reporting
+│   ├── 12_ranker_features.py          # (Phase 4) Ranker feature extraction & negative sampling
+│   └── 12_ranker.py                   # (Phase 4) LGBMRanker LambdaMART training & serving
 │
 ├── api/                               # FastAPI serving application
 │   ├── Dockerfile                     # Container definition for API
@@ -42,7 +44,8 @@ amazon_project/
 │   ├── test_sync_embeddings.py        # Qdrant sync and ANN retrieval tests
 │   ├── test_admin_retrain.py          # (Phase 2) Admin retrain trigger and auth tests
 │   ├── test_retrain_workflow.py       # (Phase 2) GitHub Actions retrain workflow syntax tests
-│   └── test_model_artifacts.py        # (Phase 3) Model binary persistence and MLflow tracking tests
+│   ├── test_model_artifacts.py        # (Phase 3) Model binary persistence and MLflow tracking tests
+│   └── test_ranker.py                 # (Phase 4) Ranker feature pipeline and LGBMRanker tests
 │
 ├── .github/workflows/                 # CI/CD & automation workflows
 │   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
