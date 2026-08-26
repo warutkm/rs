@@ -56,6 +56,7 @@ HYBRID_MODEL_PATH   = os.path.join(MODELS_DIR, "hybrid_recommender.pkl")
 
 SVM_MODEL_PATH      = os.path.join(MODELS_DIR, "svm_model.pkl")
 VECTORIZER_PATH     = os.path.join(MODELS_DIR, "svm_vectorizer.pkl")
+TWO_TOWER_MODEL_PATH= os.path.join(MODELS_DIR, "two_tower.pth")
 
 RANKER_TRAIN_PATH   = os.path.join(DATA_DIR, "ranker_train.parquet")
 RANKER_TEST_PATH    = os.path.join(DATA_DIR, "ranker_test.parquet")
