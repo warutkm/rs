@@ -58,7 +58,28 @@ amazon_project/
 ├── .github/workflows/                 # CI/CD & automation workflows
 │   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
 │
-├── web/                               # (v2 target) Next.js frontend application
+├── web/                               # (Phase 8) Next.js 14 frontend application
+│   ├── app/                           # App Router pages & routes
+│   │   ├── page.tsx                   # Home: Personalized & trending recommendation rails
+│   │   ├── layout.tsx                 # Root layout & navigation shell
+│   │   ├── globals.css                # Tailwind base styles & glassmorphism theme
+│   │   ├── product/[id]/page.tsx      # Product details, Qdrant ANN neighbors, interaction logging
+│   │   ├── search/page.tsx            # Semantic search, LLM query rewrite, score breakdown
+│   │   └── admin/page.tsx             # Observability dashboard, real-time /metrics, DVC retrain trigger
+│   ├── components/                    # UI Components
+│   │   ├── Navbar.tsx                 # Search bar, user switcher, health telemetry indicator
+│   │   ├── UserSwitcher.tsx           # Seeded demo personas dropdown & custom user_id input
+│   │   ├── ProductCard.tsx            # Card with rank, score, category, LLM explanation, cart/like
+│   │   ├── ExplanationBadge.tsx       # Cached LLM 'Why This' explanation badge & flyout
+│   │   └── ScoreBreakdown.tsx         # Hybrid e5 semantic + BM25 lexical score bar visualization
+│   ├── context/                       # State management
+│   │   └── UserContext.tsx            # Active demo user, cart state, like interactions
+│   ├── lib/                           # Utilities & Client
+│   │   ├── api.ts                     # Type-safe RecSys API client with fallback resilience
+│   │   └── demoUsers.ts               # Seeded demo personas (Alex, Elena, Marcus, Sarah, Devon, Aisha, Guest)
+│   ├── package.json                   # Web dependencies & build scripts
+│   ├── tailwind.config.js             # Theme tokens, dark palette, animations
+│   └── tsconfig.json                  # TypeScript configuration
 │
 ├── data/                              # [Git-ignored] Parquet / CSV datasets & ID mappings
 ├── embeddings/                        # [Git-ignored] Precomputed .npy embeddings & BM25 indices

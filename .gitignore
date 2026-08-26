@@ -89,3 +89,13 @@ research_findings.md
 CLAUDE.md
 dvc_embed_stage.sh
 api/docker-compose.yml
+
+# =========================
+# NODE / NEXT.JS
+# =========================
+node_modules/
+web/node_modules/
+.next/
+web/.next/
+web/out/
+.npm/

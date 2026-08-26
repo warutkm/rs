@@ -389,7 +389,7 @@ them get lost either. Revisit at the phase noted, or opportunistically if you're
 - [x] Two-Tower retrieval model trained, logged to MLflow as `TwoTower`
 - [x] LLM explanations cached in Redis, cache-hit rate visible in `/metrics`
 - [x] FastAPI v2 endpoints pass `api/test_api.py` (extend v1's tests)
-- [ ] Next.js frontend hits the live API, shows personalization changing per demo user
+- [x] Next.js frontend hits the live API, shows personalization changing per demo user
 - [ ] GitHub Actions CI green on push
 - [ ] Tier 0 `docker-compose up` starts everything
 - [ ] Tier 1 deployed, public URL works
