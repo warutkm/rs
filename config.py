@@ -145,6 +145,16 @@ REDIS_URL             = os.getenv("REDIS_URL", None)
 REDIS_PASSWORD        = os.getenv("REDIS_PASSWORD", None)
 EXPLANATION_CACHE_TTL = int(os.getenv("EXPLANATION_CACHE_TTL", "86400"))  # 24 hours
 
+# =========================
+# POSTGRES CONFIG (v2)
+# =========================
+POSTGRES_HOST         = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT         = int(os.getenv("POSTGRES_PORT", "5432"))
+POSTGRES_DB           = os.getenv("POSTGRES_DB", "recsys")
+POSTGRES_USER         = os.getenv("POSTGRES_USER", "postgres")
+POSTGRES_PASSWORD     = os.getenv("POSTGRES_PASSWORD", "postgres")
+POSTGRES_URL          = os.getenv("DATABASE_URL", None)
+
 PIPELINE_DIR          = os.path.join(BASE_DIR, "pipeline")
 
 

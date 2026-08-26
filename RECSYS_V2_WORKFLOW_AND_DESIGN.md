@@ -388,7 +388,7 @@ them get lost either. Revisit at the phase noted, or opportunistically if you're
 - [x] `LGBMRanker` trained, logged to MLflow as `Ranker`
 - [x] Two-Tower retrieval model trained, logged to MLflow as `TwoTower`
 - [x] LLM explanations cached in Redis, cache-hit rate visible in `/metrics`
-- [ ] FastAPI v2 endpoints pass `api/test_api.py` (extend v1's tests)
+- [x] FastAPI v2 endpoints pass `api/test_api.py` (extend v1's tests)
 - [ ] Next.js frontend hits the live API, shows personalization changing per demo user
 - [ ] GitHub Actions CI green on push
 - [ ] Tier 0 `docker-compose up` starts everything

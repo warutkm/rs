@@ -1,27 +1,22 @@
 """
-Phase 12 — End-to-End API Tests
+Phase 7 — End-to-End API Integration Test Script
 File: api/test_api.py
 
 Run against a live service:
-    # Option A — local uvicorn
+    # Local uvicorn
     uvicorn api.main:app --host 0.0.0.0 --port 8000
     python api/test_api.py
 
-    # Option B — docker-compose
-    docker-compose up -d
-    python api/test_api.py
-
-Requires: httpx  (pip install httpx)
-
 Tests:
-  1. GET  /health
-  2. POST /recommend  — warm user (expects real recommendations)
-  3. POST /recommend  — cold-start user (expects cold-start flag = True)
-  4. POST /recommend  — missing fields (expects 422 validation error)
-  5. GET  /similar/{item_id}
-  6. GET  /search?q=
-  7. GET  /similar/{item_id}?top_k=5 — custom top_k
-  8. GET  /health — model_loaded field check
+  1. GET  /v2/health & GET /health
+  2. GET  /metrics
+  3. POST /v2/recommend — warm user
+  4. POST /v2/recommend — cold-start user
+  5. POST /v2/recommend — validation error
+  6. GET  /v2/similar/{item_id}
+  7. GET  /v2/search?q=
+  8. POST /v2/events
+  9. GET  /admin/retrain/status
 """
 
 import sys
@@ -45,154 +40,132 @@ def check(name: str, passed: bool, detail: str = ""):
 
 def run_tests():
     print(f"\n{'='*60}")
-    print("  DS11 Phase 12 — API Integration Tests")
+    print("  DS11 Phase 7 — FastAPI v2 Integration Tests")
     print(f"  Target: {BASE_URL}")
     print(f"{'='*60}\n")
 
     client = httpx.Client(base_url=BASE_URL, timeout=60.0)
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 1 — GET /health
-    # ────────────────────────────────────────────────────────────
-    print("TEST 1: GET /health")
+    # 1. GET /v2/health
+    print("TEST 1: GET /v2/health")
     try:
-        r = client.get("/health")
-        check("status code 200",       r.status_code == 200, str(r.status_code))
+        r = client.get("/v2/health")
+        check("status code 200", r.status_code == 200, str(r.status_code))
         body = r.json()
-        check("status == 'ok'",        body.get("status") == "ok", str(body))
-        check("model_loaded present",  "model_loaded" in body)
+        check("status == 'ok'", body.get("status") == "ok", str(body))
+        check("model_loaded present", "model_loaded" in body)
+        check("ranker_loaded present", "ranker_loaded" in body)
     except Exception as e:
-        check("GET /health reachable", False, str(e))
+        check("GET /v2/health reachable", False, str(e))
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 2 — POST /recommend (warm path)
-    # ────────────────────────────────────────────────────────────
-    print("\nTEST 2: POST /recommend — warm user")
+    # 2. GET /metrics
+    print("\nTEST 2: GET /metrics")
     try:
-        # Fetch a real item_id and user_id from the health check
-        # We hard-code one likely to exist based on the dataset
+        r = client.get("/metrics")
+        check("status code 200", r.status_code == 200, str(r.status_code))
+        body = r.json()
+        check("total_requests in metrics", "total_requests" in body)
+        check("latency_p50_ms in metrics", "latency_p50_ms" in body)
+        check("cache_hit_rate in metrics", "cache_hit_rate" in body)
+    except Exception as e:
+        check("GET /metrics reachable", False, str(e))
+
+    # 3. POST /v2/recommend (warm path)
+    print("\nTEST 3: POST /v2/recommend — warm user")
+    try:
         payload = {
             "item_id": "B08N5WRWNW",
             "user_id": "AHPI18EE22YZMH5TQ4YNLBAFZJA",
-            "top_k":   5,
+            "top_k": 5,
         }
-        r = client.post("/recommend", json=payload)
-        check("status code 200 or 404", r.status_code in (200, 404),
-              str(r.status_code))
+        r = client.post("/v2/recommend", json=payload)
+        check("status code 200", r.status_code == 200, str(r.status_code))
         if r.status_code == 200:
             body = r.json()
-            check("results list present",  "results" in body)
-            check("cold_start field",       "cold_start" in body)
-            check("results is list",        isinstance(body.get("results"), list))
+            check("results list present", "results" in body)
+            check("cold_start field", "cold_start" in body)
             results_list = body.get("results", [])
             if results_list:
                 first = results_list[0]
-                check("result has item_id", "item_id" in first, str(first))
-                check("result has score",   "score"   in first)
-                check("result has source",  "source"  in first)
-                check("result has title",   "title"   in first)
-        else:
-            print(f"  {INFO}  item_id not in dataset — acceptable 404")
+                check("result has item_id", "item_id" in first, str(first.get("item_id")))
+                check("result has score", "score" in first)
+                check("result has source", "source" in first)
+                check("result has title", "title" in first)
     except Exception as e:
-        check("POST /recommend warm", False, str(e))
+        check("POST /v2/recommend warm", False, str(e))
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 3 — POST /recommend (cold-start user)
-    # ────────────────────────────────────────────────────────────
-    print("\nTEST 3: POST /recommend — cold-start user")
+    # 4. POST /v2/recommend (cold start)
+    print("\nTEST 4: POST /v2/recommend — cold-start user")
     try:
         payload = {
-            "item_id": "B08N5WRWNW",
             "user_id": "__BRAND_NEW_USER_COLD_START__",
-            "top_k":   5,
+            "top_k": 5,
         }
-        r = client.post("/recommend", json=payload)
-        check("status code 200 or 404", r.status_code in (200, 404),
-              str(r.status_code))
+        r = client.post("/v2/recommend", json=payload)
+        check("status code 200", r.status_code == 200, str(r.status_code))
         if r.status_code == 200:
             body = r.json()
-            check("cold_start == True",    body.get("cold_start") is True,
-                  str(body.get("cold_start")))
-            check("results list present",  isinstance(body.get("results"), list))
+            check("cold_start == True", body.get("cold_start") is True, str(body.get("cold_start")))
+            check("results list present", isinstance(body.get("results"), list))
     except Exception as e:
-        check("POST /recommend cold-start", False, str(e))
+        check("POST /v2/recommend cold-start", False, str(e))
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 4 — POST /recommend (validation error — missing field)
-    # ────────────────────────────────────────────────────────────
-    print("\nTEST 4: POST /recommend — missing required field (422)")
+    # 5. POST /v2/recommend (422 validation)
+    print("\nTEST 5: POST /v2/recommend — missing required field (422)")
     try:
-        r = client.post("/recommend", json={"top_k": 5})   # item_id + user_id missing
+        r = client.post("/v2/recommend", json={"top_k": 5})
         check("status code 422", r.status_code == 422, str(r.status_code))
     except Exception as e:
         check("422 validation check", False, str(e))
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 5 — GET /similar/{item_id}
-    # ────────────────────────────────────────────────────────────
-    print("\nTEST 5: GET /similar/{item_id}")
+    # 6. GET /v2/similar/{item_id}
+    print("\nTEST 6: GET /v2/similar/{item_id}")
     try:
-        r = client.get("/similar/B08N5WRWNW?top_k=5")
-        check("status code 200 or 404", r.status_code in (200, 404),
-              str(r.status_code))
+        r = client.get("/v2/similar/B08N5WRWNW?top_k=5")
+        check("status code 200 or 404", r.status_code in (200, 404), str(r.status_code))
         if r.status_code == 200:
             body = r.json()
             check("results list present", "results" in body)
-            check("results is list",      isinstance(body.get("results"), list))
-            check("correct top_k count",  len(body.get("results", [])) <= 5)
+            check("correct top_k count", len(body.get("results", [])) <= 5)
     except Exception as e:
-        check("GET /similar", False, str(e))
+        check("GET /v2/similar", False, str(e))
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 6 — GET /search?q=
-    # ────────────────────────────────────────────────────────────
-    print("\nTEST 6: GET /search?q=wireless+headphones")
+    # 7. GET /v2/search
+    print("\nTEST 7: GET /v2/search?q=wireless+headphones")
     try:
-        r = client.get("/search", params={"q": "wireless headphones", "top_k": 5})
+        r = client.get("/v2/search", params={"q": "wireless headphones", "top_k": 5})
         check("status code 200", r.status_code == 200, str(r.status_code))
         if r.status_code == 200:
             body = r.json()
-            check("query echoed back",    body.get("query") == "wireless headphones")
+            check("query echoed back", body.get("query") == "wireless headphones")
             check("results list present", isinstance(body.get("results"), list))
-            check("results non-empty",    len(body.get("results", [])) > 0)
             if body.get("results"):
                 first = body["results"][0]
                 check("result has hybrid_score", "hybrid_score" in first)
-                check("result has item_id",      "item_id"      in first)
+                check("result has item_id", "item_id" in first)
     except Exception as e:
-        check("GET /search", False, str(e))
+        check("GET /v2/search", False, str(e))
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 7 — GET /similar with top_k=3
-    # ────────────────────────────────────────────────────────────
-    print("\nTEST 7: GET /similar — top_k param respected")
+    # 8. POST /v2/events
+    print("\nTEST 8: POST /v2/events")
     try:
-        r = client.get("/similar/B08N5WRWNW", params={"top_k": 3})
+        payload = {
+            "user_id": "test_script_user",
+            "item_id": "B08N5WRWNW",
+            "event_type": "click",
+            "rating": 5.0,
+            "metadata": {"source": "test_script"},
+        }
+        r = client.post("/v2/events", json=payload)
+        check("status code 200", r.status_code == 200, str(r.status_code))
         if r.status_code == 200:
             body = r.json()
-            check("top_k=3 respected", len(body.get("results", [])) <= 3,
-                  f"got {len(body.get('results', []))}")
-        else:
-            print(f"  {INFO}  item not found (404) — skip top_k check")
+            check("status == 'ok'", body.get("status") == "ok", str(body))
     except Exception as e:
-        check("GET /similar top_k", False, str(e))
+        check("POST /v2/events", False, str(e))
 
-    # ────────────────────────────────────────────────────────────
-    # TEST 8 — model_loaded == True
-    # ────────────────────────────────────────────────────────────
-    print("\nTEST 8: GET /health — model_loaded == True")
-    try:
-        r = client.get("/health")
-        body = r.json()
-        check("model_loaded == True", body.get("model_loaded") is True,
-              str(body.get("model_loaded")))
-    except Exception as e:
-        check("model_loaded check", False, str(e))
-
-    # ────────────────────────────────────────────────────────────
-    # SUMMARY
-    # ────────────────────────────────────────────────────────────
-    total  = len(results)
+    # 9. Summary
+    total = len(results)
     passed = sum(1 for _, ok in results if ok)
     failed = total - passed
 

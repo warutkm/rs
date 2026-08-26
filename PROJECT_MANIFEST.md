@@ -33,16 +33,20 @@ amazon_project/
 │
 ├── api/                               # FastAPI serving application
 │   ├── Dockerfile                     # Container definition for API
-│   ├── main.py                        # FastAPI endpoints (/recommend, /similar, /health, /admin/retrain)
+│   ├── main.py                        # (Phase 7) Async FastAPI endpoints (/v2/recommend, /v2/similar, /v2/search, /v2/events, /v2/health, /metrics)
+│   ├── db.py                          # (Phase 7) Async PostgreSQL client & event logging
+│   ├── cache.py                       # (Phase 7) Async Redis explanation & response cache
+│   ├── logging_config.py              # (Phase 7) Structured JSON logging & /metrics counters
 │   ├── retrain_manager.py             # (Phase 2) Subprocess manager for DVC pipeline execution
-│   ├── schemas.py                     # Pydantic request/response schemas
-│   ├── test_api.py                    # Endpoint test suite
+│   ├── schemas.py                     # (Phase 7) Pydantic v2 request/response schemas
+│   ├── test_api.py                    # Endpoint test script
 │   └── docker-compose.yml             # (Legacy v1 local compose - root compose is v2 standard)
 │
 ├── pipeline/                          # (v2 target) Orchestration & background sync tasks
 │   └── sync_embeddings.py             # (Phase 1) Qdrant vector index synchronization
 │
 ├── tests/                             # Unit and integration test suite
+│   ├── test_api.py                    # (Phase 7) FastAPI v2 integration and unit tests
 │   ├── test_sync_embeddings.py        # Qdrant sync and ANN retrieval tests
 │   ├── test_admin_retrain.py          # (Phase 2) Admin retrain trigger and auth tests
 │   ├── test_retrain_workflow.py       # (Phase 2) GitHub Actions retrain workflow syntax tests
