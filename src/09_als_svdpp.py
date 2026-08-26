@@ -139,8 +139,9 @@ def main():
     create_dirs()
 
     # MLFLOW SETUP
+    os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
     mlflow.set_tracking_uri("mlflow/")
-    mlflow.set_experiment("DS11")
+    mlflow.set_experiment("DS11-v2")
 
     # =========================
     # LOAD DATA

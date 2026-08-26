@@ -45,7 +45,7 @@ ProductRecommender                = _mod05.ProductRecommender
 CollaborativeFilteringRecommender = _mod05.CollaborativeFilteringRecommender
 
 mlflow.set_tracking_uri(MLFLOW_URI)
-mlflow.set_experiment("DS11")
+mlflow.set_experiment("DS11-v2")
 
 
 # =============================================================================

@@ -71,6 +71,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 # =========================
 # MLflow CONFIG
 # =========================
+os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
 MLFLOW_TRACKING_URI = "file:./mlflow"
 MLFLOW_EXPERIMENT   = "DS11-v2"
 

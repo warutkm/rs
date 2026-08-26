@@ -6,13 +6,6 @@ Covers:
   3.7 Export summary_df
 
 Run AFTER 03a_sentiment_tfidf_svm.py
-
-Changes vs previous version:
-  - All imports moved to top (torch + transformers no longer split across file)
-  - device auto-detected via torch.cuda.is_available() instead of hardcoded -1
-  - grouped.get_group(asin) guarded with try/except KeyError
-  - gc.collect() runs immediately after del summariser (before MLflow I/O)
-  - Progress print uses len(top500) instead of hardcoded 500
 """
 
 import os
@@ -24,45 +17,14 @@ import pandas as pd
 import pyarrow.parquet as pq
 import torch
 import mlflow
-from transformers import pipeline
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
 
-# =============================================================================
-# CREATE DIRS
-# =============================================================================
+
 def create_dirs():
     os.makedirs("outputs", exist_ok=True)
-    os.makedirs("mlflow",  exist_ok=True)
+    os.makedirs("mlflow", exist_ok=True)
 
-create_dirs()
 
-# =============================================================================
-# LOAD DATA — minimal columns only to keep RAM footprint small
-# =============================================================================
-DATA_PATH = "data/clean_merge_df.parquet"
-
-available_cols = pq.read_schema(DATA_PATH).names
-
-REQUIRED_COLS = ["rating", "text_clean"]
-OPTIONAL_COLS = ["item_id", "parent_asin"]
-
-item_col = next((c for c in OPTIONAL_COLS if c in available_cols), None)
-if item_col is None:
-    raise ValueError(
-        "Neither 'item_id' nor 'parent_asin' found in parquet. "
-        "Ensure 01_data_ingestion.py ran correctly."
-    )
-
-load_cols = REQUIRED_COLS + [item_col]
-df = pd.read_parquet(DATA_PATH, columns=load_cols)
-print(f"Loaded {len(df):,} rows — columns: {load_cols}")
-
-# =============================================================================
-# SENTIMENT — recomputed from rating (no dependency on 03a)
-#   0 = negative (rating <= 2)
-#   1 = neutral  (rating == 3)
-#   2 = positive (rating >= 4)
-#   avg_sentiment in the CSV is the mean of these codes (0–2 continuous scale)
-# =============================================================================
 def rating_to_sentiment_code(r: float) -> int:
     if r <= 2:
         return 0
@@ -70,155 +32,170 @@ def rating_to_sentiment_code(r: float) -> int:
         return 1
     return 2
 
-df["sentiment_code"] = df["rating"].apply(rating_to_sentiment_code)
 
-# =============================================================================
-# TOP-500 PRODUCTS BY REVIEW COUNT
-# =============================================================================
-top500 = df[item_col].value_counts().head(500).index.tolist()
+def main():
+    create_dirs()
 
-df_top500 = df[df[item_col].isin(top500)].copy()
-del df
-gc.collect()
+    # =============================================================================
+    # LOAD DATA — minimal columns only to keep RAM footprint small
+    # =============================================================================
+    data_path = "data/clean_merge_df.parquet"
 
-print(f"Top-500 subset: {df_top500.shape}")
+    available_cols = pq.read_schema(data_path).names
 
-# Pre-group once — avoids repeated O(n) boolean indexing inside the loop
-grouped = df_top500.groupby(item_col)
+    required_cols = ["rating", "text_clean"]
+    optional_cols = ["item_id", "parent_asin"]
 
-# =============================================================================
-# LOAD T5 MODEL
-#   device auto-detected: GPU if available, CPU otherwise
-#   keeping CPU as the safe default for constrained environments
-# =============================================================================
-T5_MODEL            = "t5-small"
-MAX_INPUT_CHARS     = 1_500   # ~350 tokens — within T5-small's 512 token limit
-MAX_OUT_LEN         = 120
-MIN_OUT_LEN         = 30
-REVIEWS_PER_PRODUCT = 50
+    item_col = next((c for c in optional_cols if c in available_cols), None)
+    if item_col is None:
+        raise ValueError(
+            "Neither 'item_id' nor 'parent_asin' found in parquet. "
+            "Ensure 01_data_ingestion.py ran correctly."
+        )
 
-device = 0 if torch.cuda.is_available() else -1
-device_label = f"cuda:{device}" if device >= 0 else "cpu"
-print(f"\nLoading {T5_MODEL} on {device_label} …")
+    load_cols = required_cols + [item_col]
+    df = pd.read_parquet(data_path, columns=load_cols)
+    print(f"Loaded {len(df):,} rows — columns: {load_cols}")
 
-summariser = pipeline(
-    "summarization",
-    model=T5_MODEL,
-    tokenizer=T5_MODEL,
-    device=device,
-)
-print("Model ready.")
+    # =============================================================================
+    # SENTIMENT — recomputed from rating
+    # =============================================================================
+    df["sentiment_code"] = df["rating"].apply(rating_to_sentiment_code)
 
-# =============================================================================
-# SUMMARIZATION LOOP
-# =============================================================================
-records   = []
-n_skipped = 0
-n_total   = len(top500)
+    # =============================================================================
+    # TOP-500 PRODUCTS BY REVIEW COUNT
+    # =============================================================================
+    top500 = df[item_col].value_counts().head(500).index.tolist()
 
-for i, asin in enumerate(top500, 1):
+    df_top500 = df[df[item_col].isin(top500)].copy()
+    del df
+    gc.collect()
 
-    # Guard against KeyError — possible if groupby dropped an asin
-    try:
-        product_df = grouped.get_group(asin)
-    except KeyError:
-        n_skipped += 1
-        continue
+    print(f"Top-500 subset: {df_top500.shape}")
 
-    # Aggregate stats (cheap — done before the expensive T5 call)
-    avg_rating = round(product_df["rating"].mean(), 3)
-    avg_sent   = round(product_df["sentiment_code"].mean(), 3)
-    n_reviews  = len(product_df)
+    grouped = df_top500.groupby(item_col)
 
-    # Build input text
-    texts = (
-        product_df["text_clean"]
-        .dropna()
-        .astype(str)
-        .head(REVIEWS_PER_PRODUCT)
-        .tolist()
-    )
-    combined = " ".join(texts)[:MAX_INPUT_CHARS]
+    # =============================================================================
+    # LOAD T5 MODEL
+    # =============================================================================
+    t5_model = "t5-small"
+    max_input_chars = 1_500   # ~350 tokens — within T5-small's 512 token limit
+    max_out_len = 120
+    min_out_len = 30
+    reviews_per_product = 50
 
-    if len(combined.split()) < 20:
-        n_skipped += 1
-        continue
+    device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"\nLoading {t5_model} on {device_str} …")
 
-    # Summarize
-    try:
-        with torch.no_grad():
-            result = summariser(
-                combined,
-                max_length=MAX_OUT_LEN,
-                min_length=MIN_OUT_LEN,
-                do_sample=False,
-                truncation=True,
-            )
-        summary = result[0]["summary_text"]
-    except Exception as e:
-        summary = f"[error: {e}]"
+    tokenizer = AutoTokenizer.from_pretrained(t5_model)
+    model = AutoModelForSeq2SeqLM.from_pretrained(t5_model).to(device_str)
+    model.eval()
+    print("Model ready.")
 
-    records.append({
-        "asin":          asin,
-        "summary":       summary,
-        "avg_sentiment": avg_sent,
-        "n_reviews":     n_reviews,
-        "avg_rating":    avg_rating,
-    })
+    # =============================================================================
+    # SUMMARIZATION LOOP
+    # =============================================================================
+    records = []
+    n_skipped = 0
+    n_total = len(top500)
 
-    if i % 50 == 0:
-        print(f"  [{i}/{n_total}] products summarized …")
+    for i, asin in enumerate(top500, 1):
+        try:
+            product_df = grouped.get_group(asin)
+        except KeyError:
+            n_skipped += 1
+            continue
 
-# =============================================================================
-# BUILD + EXPORT SUMMARY CSV
-#   outputs/final_top500_product_summary.csv
-#   workflow-spec columns: asin, summary, avg_sentiment, n_reviews
-#   extra kept:            avg_rating
-# =============================================================================
-summary_df = pd.DataFrame(records)
-print(f"\nDone: {len(summary_df)} summarized | {n_skipped} skipped")
+        avg_rating = round(product_df["rating"].mean(), 3)
+        avg_sent = round(product_df["sentiment_code"].mean(), 3)
+        n_reviews = len(product_df)
 
-OUTPUT_PATH = "outputs/final_top500_product_summary.csv"
-summary_df[
-    ["asin", "summary", "avg_sentiment", "n_reviews", "avg_rating"]
-].to_csv(OUTPUT_PATH, index=False)
-print(f"Saved → {OUTPUT_PATH}")
+        texts = (
+            product_df["text_clean"]
+            .dropna()
+            .astype(str)
+            .head(reviews_per_product)
+            .tolist()
+        )
+        combined = " ".join(texts)[:max_input_chars]
 
-# Free T5 model before MLflow artifact upload I/O
-del summariser, df_top500, grouped
-gc.collect()
+        if len(combined.split()) < 20:
+            n_skipped += 1
+            continue
 
-# =============================================================================
-# MLFLOW — T5_summary run
-# =============================================================================
-if not summary_df.empty:
-    avg_len = summary_df["summary"].str.split().str.len().mean()
-else:
-    avg_len = 0.0
-    
-mlflow.set_tracking_uri("mlflow/")
-mlflow.set_experiment("DS11")
+        try:
+            input_text = "summarize: " + combined
+            inputs = tokenizer(input_text, return_tensors="pt", max_length=512, truncation=True).to(device_str)
+            with torch.no_grad():
+                outputs = model.generate(
+                    **inputs,
+                    max_length=max_out_len,
+                    min_length=min_out_len,
+                    do_sample=False,
+                )
+            summary = tokenizer.decode(outputs[0], skip_special_tokens=True)
+        except Exception as e:
+            summary = f"[error: {e}]"
 
-with mlflow.start_run(run_name="T5_summary"):
-    mlflow.log_param("model",                T5_MODEL)
-    mlflow.log_param("device",               device_label)
-    mlflow.log_param("max_input_chars",      MAX_INPUT_CHARS)
-    mlflow.log_param("max_output_length",    MAX_OUT_LEN)
-    mlflow.log_param("min_output_length",    MIN_OUT_LEN)
-    mlflow.log_param("reviews_per_product",  REVIEWS_PER_PRODUCT)
-    mlflow.log_param("sentiment_source",     "rating_recomputed")
+        records.append({
+            "asin": asin,
+            "summary": summary,
+            "avg_sentiment": avg_sent,
+            "n_reviews": n_reviews,
+            "avg_rating": avg_rating,
+        })
 
-    mlflow.log_metric("n_summarized",       len(summary_df))
-    mlflow.log_metric("n_skipped",          n_skipped)
-    mlflow.log_metric("avg_summary_length", round(avg_len, 2))
+        if i % 50 == 0:
+            print(f"  [{i}/{n_total}] products summarized …")
 
-    mlflow.log_artifact(OUTPUT_PATH)
+    # =============================================================================
+    # BUILD + EXPORT SUMMARY CSV
+    # =============================================================================
+    summary_df = pd.DataFrame(records)
+    print(f"\nDone: {len(summary_df)} summarized | {n_skipped} skipped")
 
-print(f"MLflow T5_summary run logged — "
-      f"n_summarized={len(summary_df)}, avg_summary_length={avg_len:.1f} words")
+    output_path = "outputs/final_top500_product_summary.csv"
+    summary_df[
+        ["asin", "summary", "avg_sentiment", "n_reviews", "avg_rating"]
+    ].to_csv(output_path, index=False)
+    print(f"Saved → {output_path}")
 
-# =============================================================================
-# DONE
-# =============================================================================
-print("\n✓ Phase 3B complete.")
-print(f"  {OUTPUT_PATH}")
+    del model, tokenizer, df_top500, grouped
+    gc.collect()
+
+    # =============================================================================
+    # MLFLOW — T5_summary run
+    # =============================================================================
+    if not summary_df.empty:
+        avg_len = summary_df["summary"].str.split().str.len().mean()
+    else:
+        avg_len = 0.0
+
+    os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+    mlflow.set_tracking_uri("mlflow/")
+    mlflow.set_experiment("DS11-v2")
+
+    with mlflow.start_run(run_name="T5_summary"):
+        mlflow.log_param("model", t5_model)
+        mlflow.log_param("device", device_str)
+        mlflow.log_param("max_input_chars", max_input_chars)
+        mlflow.log_param("max_output_length", max_out_len)
+        mlflow.log_param("min_output_length", min_out_len)
+        mlflow.log_param("reviews_per_product", reviews_per_product)
+        mlflow.log_param("sentiment_source", "rating_recomputed")
+
+        mlflow.log_metric("n_summarized", len(summary_df))
+        mlflow.log_metric("n_skipped", n_skipped)
+        mlflow.log_metric("avg_summary_length", round(avg_len, 2))
+
+        mlflow.log_artifact(output_path)
+
+    print(f"MLflow T5_summary run logged — "
+          f"n_summarized={len(summary_df)}, avg_summary_length={avg_len:.1f} words")
+
+    print("\n✓ Phase 3B complete.")
+    print(f"  {output_path}")
+
+
+if __name__ == "__main__":
+    main()

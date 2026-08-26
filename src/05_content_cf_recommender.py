@@ -49,7 +49,7 @@ RANDOM_STATE    = 42
 
 # FIX-1: file-based URI — matches every other phase and Phase 11 report
 MLFLOW_URI      = "mlflow/"
-EXPERIMENT_NAME = "DS11"
+EXPERIMENT_NAME = "DS11-v2"
 
 COL_CATEGORY    = "main_category_meta"   # adjust if column name differs in your parquet
 
@@ -366,6 +366,7 @@ def log_to_mlflow(
     c_recall: float, c_ndcg: float, c_precision: float,
     cf_recall: float, cf_ndcg: float, cf_precision: float,
 ):
+    os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
     mlflow.set_tracking_uri(MLFLOW_URI)          # FIX-1: "mlflow/" not sqlite
     mlflow.set_experiment(EXPERIMENT_NAME)
 

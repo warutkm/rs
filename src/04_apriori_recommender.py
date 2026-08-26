@@ -28,6 +28,7 @@ import os
 from collections import defaultdict
 
 import dill
+import mlflow
 import pandas as pd
 from mlxtend.frequent_patterns import apriori, association_rules
 from mlxtend.preprocessing import TransactionEncoder
@@ -352,8 +353,6 @@ def main():
 
     # 4.5
     gt_pct = validate_rules(rules, df)
-    # Uncomment when MLflow is wired up in this file (Phase 8 integration):
-    # mlflow.log_metric("apriori_gt_confirmed_pct", gt_pct)
 
     # 4.6
     model = AprioriRecommender(rules_df=rules, meta_df=df)
@@ -362,10 +361,36 @@ def main():
     sample_item = max(model.rule_dict, key=lambda k: len(model.rule_dict[k]))
     model.verify_recommendations(sample_item, top_k=5)
 
-    with open("models/apriori_recommender.pkl", "wb") as f:
+    model_path = "models/apriori_recommender.pkl"
+    with open(model_path, "wb") as f:
         dill.dump(model, f)
 
-    print("Model saved to: models/apriori_recommender.pkl")
+    print(f"Model saved to: {model_path}")
+
+    # =============================================================================
+    # 4.7 MLFLOW LOGGING — Apriori run
+    # =============================================================================
+    os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
+    mlflow.set_tracking_uri("mlflow/")
+    mlflow.set_experiment("DS11-v2")
+
+    with mlflow.start_run(run_name="Apriori"):
+        mlflow.log_param("min_item_freq", MIN_ITEM_FREQ)
+        mlflow.log_param("min_support", 0.0005)
+        mlflow.log_param("min_threshold_lift", 1.0)
+        mlflow.log_param("rule_type", "1->1")
+
+        mlflow.log_metric("n_rules", len(rules))
+        mlflow.log_metric("n_items_with_rules", len(model.rule_dict))
+        mlflow.log_metric("apriori_gt_confirmed_pct", gt_pct)
+        if not rules.empty:
+            mlflow.log_metric("max_lift", float(rules["lift"].max()))
+            mlflow.log_metric("avg_lift", float(rules["lift"].mean()))
+
+        mlflow.log_artifact("outputs/apriori_rules.csv")
+        mlflow.log_artifact(model_path)
+
+    print(f"MLflow Apriori run logged — n_rules={len(rules)}, n_items={len(model.rule_dict)}")
     print("\nPhase 4 complete.")
 
 

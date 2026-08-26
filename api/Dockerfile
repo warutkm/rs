@@ -21,6 +21,10 @@ RUN pip install --no-cache-dir --upgrade pip && \
 
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/e5-base-v2')"
 
+# Copy root config & pipeline
+COPY config.py ./config.py
+COPY pipeline/ ./pipeline/
+
 # Copy project source so HybridRecommender imports work
 # (08_hybrid_engine imports 04_ and 05_ via importlib)
 COPY src/ ./src/

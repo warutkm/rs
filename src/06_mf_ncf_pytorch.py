@@ -331,8 +331,9 @@ def main():
         .to_dict()
     )
 
+    os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
     mlflow.set_tracking_uri("mlflow/")
-    mlflow.set_experiment("DS11")
+    mlflow.set_experiment("DS11-v2")
 
     # ================= MF =================
     print("\n[6.5] Training MF...")
@@ -348,7 +349,7 @@ def main():
         print(f"  MF  RMSE={mf_rmse:.4f}  Recall@10={mf_recall:.4f}  NDCG@10={mf_ndcg:.4f}")
 
         mlflow.log_params({
-            "emb_dim": EMB_DIM, "epochs": 8,
+            "emb_dim": EMB_DIM, "epochs": 15,
             "lr": LR, "batch_size": BATCH_SIZE
         })
         mlflow.log_metrics({
@@ -385,7 +386,7 @@ def main():
         print(f"  NCF RMSE={ncf_rmse:.4f}  Recall@10={ncf_recall:.4f}  NDCG@10={ncf_ndcg:.4f}")
 
         mlflow.log_params({
-            "emb_dim": EMB_DIM, "epochs": 10,
+            "emb_dim": EMB_DIM, "epochs": 15,
             "lr": LR, "batch_size": BATCH_SIZE
         })
         mlflow.log_metrics({

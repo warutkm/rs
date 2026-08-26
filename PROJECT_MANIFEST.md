@@ -41,7 +41,8 @@ amazon_project/
 ├── tests/                             # Unit and integration test suite
 │   ├── test_sync_embeddings.py        # Qdrant sync and ANN retrieval tests
 │   ├── test_admin_retrain.py          # (Phase 2) Admin retrain trigger and auth tests
-│   └── test_retrain_workflow.py       # (Phase 2) GitHub Actions retrain workflow syntax tests
+│   ├── test_retrain_workflow.py       # (Phase 2) GitHub Actions retrain workflow syntax tests
+│   └── test_model_artifacts.py        # (Phase 3) Model binary persistence and MLflow tracking tests
 │
 ├── .github/workflows/                 # CI/CD & automation workflows
 │   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
