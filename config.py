@@ -2,9 +2,25 @@ import os
 import torch
 
 # =========================
-# BASE DIR
+# BASE DIR & ENV LOADING
 # =========================
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+
+_env_file = os.path.join(BASE_DIR, ".env")
+if os.path.exists(_env_file):
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(_env_file)
+    except ImportError:
+        with open(_env_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    k = k.strip()
+                    v = v.strip().strip('"').strip("'")
+                    if k not in os.environ:
+                        os.environ[k] = v
 
 # =========================
 # DATASET CONFIG
@@ -116,10 +132,20 @@ RANDOM_STATE = 42
 # =========================
 # LLM CONFIG (v2)
 # =========================
-LLM_MODEL      = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+LLM_MODEL             = os.getenv("LLM_MODEL", "gemini-3.5-flash-lite")
+GEMINI_API_KEY        = os.getenv("GEMINI_API_KEY", "")
+MODEL_VERSION         = os.getenv("MODEL_VERSION", "v2.0")
 
-PIPELINE_DIR   = os.path.join(BASE_DIR, "pipeline")
+# =========================
+# REDIS CONFIG (v2)
+# =========================
+REDIS_HOST            = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT            = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_URL             = os.getenv("REDIS_URL", None)
+REDIS_PASSWORD        = os.getenv("REDIS_PASSWORD", None)
+EXPLANATION_CACHE_TTL = int(os.getenv("EXPLANATION_CACHE_TTL", "86400"))  # 24 hours
+
+PIPELINE_DIR          = os.path.join(BASE_DIR, "pipeline")
 
 
 # =========================

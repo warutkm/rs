@@ -35,6 +35,10 @@ httpx==0.28.1
 # Vector DB
 qdrant-client==1.19.0
 
+# LLM & Cache
+google-generativeai==0.8.4
+redis==5.2.1
+
 mlxtend==0.23.4
 mlflow-skinny==3.10.1
 dvc==3.67.1

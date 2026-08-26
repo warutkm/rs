@@ -28,7 +28,8 @@ amazon_project/
 │   ├── 11_mlflow_report.ipynb         # MLflow metric leaderboard & visual reporting
 │   ├── 12_ranker_features.py          # (Phase 4) Ranker feature extraction & negative sampling
 │   ├── 12_ranker.py                   # (Phase 4) LGBMRanker LambdaMART training & serving
-│   └── 13_two_tower.py                # (Phase 5) PyTorch Two-Tower retrieval model & serving
+│   ├── 13_two_tower.py                # (Phase 5) PyTorch Two-Tower retrieval model & serving
+│   └── 14_llm_layer.py                # (Phase 6) Gemini 3.5 Flash-Lite LLM explanations & query rewriting
 │
 ├── api/                               # FastAPI serving application
 │   ├── Dockerfile                     # Container definition for API
@@ -47,7 +48,8 @@ amazon_project/
 │   ├── test_retrain_workflow.py       # (Phase 2) GitHub Actions retrain workflow syntax tests
 │   ├── test_model_artifacts.py        # (Phase 3) Model binary persistence and MLflow tracking tests
 │   ├── test_ranker.py                 # (Phase 4) Ranker feature pipeline and LGBMRanker tests
-│   └── test_two_tower.py              # (Phase 5) Two-Tower contrastive model & retrieval tests
+│   ├── test_two_tower.py              # (Phase 5) Two-Tower contrastive model & retrieval tests
+│   └── test_llm_layer.py              # (Phase 6) LLM explanation generation & query rewriting tests
 │
 ├── .github/workflows/                 # CI/CD & automation workflows
 │   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
