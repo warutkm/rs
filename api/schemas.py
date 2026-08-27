@@ -29,6 +29,7 @@ class RecommendedItem(BaseModel):
     price: Optional[float]        = Field(None, description="Product price")
     average_rating: Optional[float] = Field(None, description="Average review rating")
     explanation: Optional[str]    = Field(None, description="Customer-facing 1-sentence explanation")
+    feature_signals: Optional[Dict[str, float]] = Field(None, description="Model input signals & feature scores")
 
 
 class RecommendRequest(BaseModel):

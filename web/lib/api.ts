@@ -13,6 +13,7 @@ export interface RecommendedItem {
   price?: number | null;
   average_rating?: number | null;
   explanation?: string | null;
+  feature_signals?: Record<string, number> | null;
 }
 
 export interface RecommendResponse {
@@ -140,7 +141,15 @@ const MOCK_ITEMS: RecommendedItem[] = [
     average_rating: 4.8,
     score: 0.965,
     source: "personalized_ranker",
-    explanation: "Frequently bought with audio gear and matches your preference for premium wireless audio."
+    explanation: "Frequently bought with audio gear and matches your preference for premium wireless audio.",
+    feature_signals: {
+      "als_cf_score": 0.912,
+      "neural_cf_score": 0.885,
+      "content_similarity": 0.945,
+      "apriori_lift": 1.720,
+      "popularity_weight": 0.980,
+      "price_affinity": 0.820
+    }
   },
   {
     item_id: "B07W65PB6K",
@@ -150,7 +159,15 @@ const MOCK_ITEMS: RecommendedItem[] = [
     average_rating: 4.7,
     score: 0.942,
     source: "personalized_ranker",
-    explanation: "Top candidate from Neural Collaborative Filtering based on your gaming accessories history."
+    explanation: "Top candidate from Neural Collaborative Filtering based on your gaming accessories history.",
+    feature_signals: {
+      "als_cf_score": 0.880,
+      "neural_cf_score": 0.940,
+      "content_similarity": 0.890,
+      "apriori_lift": 1.450,
+      "popularity_weight": 0.950,
+      "price_affinity": 0.870
+    }
   },
   {
     item_id: "B091J3NYVF",
@@ -160,7 +177,15 @@ const MOCK_ITEMS: RecommendedItem[] = [
     average_rating: 4.9,
     score: 0.918,
     source: "personalized_ranker",
-    explanation: "High Apriori lift score with recently viewed mechanical switches and desk mats."
+    explanation: "High Apriori lift score with recently viewed mechanical switches and desk mats.",
+    feature_signals: {
+      "als_cf_score": 0.860,
+      "neural_cf_score": 0.895,
+      "content_similarity": 0.920,
+      "apriori_lift": 2.150,
+      "popularity_weight": 0.890,
+      "price_affinity": 0.840
+    }
   },
   {
     item_id: "B0B8K7F81P",
@@ -170,7 +195,15 @@ const MOCK_ITEMS: RecommendedItem[] = [
     average_rating: 4.6,
     score: 0.884,
     source: "personalized_ranker",
-    explanation: "Matches your affinity for fast-charging multi-device power delivery gear."
+    explanation: "Matches your affinity for fast-charging multi-device power delivery gear.",
+    feature_signals: {
+      "als_cf_score": 0.820,
+      "neural_cf_score": 0.840,
+      "content_similarity": 0.870,
+      "apriori_lift": 1.250,
+      "popularity_weight": 0.910,
+      "price_affinity": 0.930
+    }
   },
   {
     item_id: "B09B8W5FW7",
@@ -180,17 +213,15 @@ const MOCK_ITEMS: RecommendedItem[] = [
     average_rating: 4.8,
     score: 0.865,
     source: "personalized_ranker",
-    explanation: "Recommended based on two-tower embedding similarity to high-activity streamer profiles."
-  },
-  {
-    item_id: "B08HG1846Z",
-    title: "Samsung 990 PRO 2TB PCIe 4.0 NVMe M.2 Internal SSD",
-    category: "Computer Accessories",
-    price: 179.99,
-    average_rating: 4.9,
-    score: 0.841,
-    source: "personalized_ranker",
-    explanation: "Trending in high-performance computing components."
+    explanation: "Recommended based on two-tower embedding similarity to high-activity streamer profiles.",
+    feature_signals: {
+      "als_cf_score": 0.790,
+      "neural_cf_score": 0.850,
+      "content_similarity": 0.880,
+      "apriori_lift": 1.350,
+      "popularity_weight": 0.870,
+      "price_affinity": 0.810
+    }
   }
 ];
 

@@ -666,6 +666,10 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
                 features=feature_dicts[idx],
             )
 
+        # Clean feature signals for model attribution
+        raw_feats = feature_dicts[idx] if idx < len(feature_dicts) else {}
+        clean_signals = {k: round(float(v), 4) for k, v in raw_feats.items()} if raw_feats else None
+
         results.append(RecommendedItem(
             item_id=iid,
             title=meta.get("title", iid),
@@ -675,6 +679,7 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
             price=meta.get("price"),
             average_rating=meta.get("average_rating"),
             explanation=explanation_text,
+            feature_signals=clean_signals,
         ))
 
     resp = RecommendResponse(
