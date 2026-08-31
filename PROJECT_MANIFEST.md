@@ -11,7 +11,8 @@ amazon_project/
 ├── requirements.txt                   # Pinned project dependencies
 ├── pyproject.toml                     # Black formatting, pytest, and tool configuration
 ├── .flake8                            # Flake8 style & exclusion rules
-├── docker-compose.yml                 # Local multi-service stack (api, postgres, redis, qdrant)
+├── docker-compose.yml                 # Local multi-service Tier 0 stack (api, web, postgres, redis, qdrant)
+├── .dockerignore                      # Build ignore for root Docker context
 ├── dvc.yaml                           # DVC pipeline DAG definition
 ├── dvc.lock                           # DVC lockfile
 │
@@ -38,7 +39,7 @@ amazon_project/
 │   ├── main.py                        # (Phase 7) Async FastAPI endpoints (/v2/recommend, /v2/similar, /v2/search, /v2/events, /v2/health, /metrics)
 │   ├── db.py                          # (Phase 7) Async PostgreSQL client & event logging
 │   ├── cache.py                       # (Phase 7) Async Redis explanation & response cache
-│   ├── logging_config.py              # (Phase 7) Structured JSON logging & /metrics counters
+│   ├── logging_config.py              # (Phase 7/10) Structured JSON logging & in-app /metrics percentiles
 │   ├── retrain_manager.py             # (Phase 2) Subprocess manager for DVC pipeline execution
 │   └── schemas.py                     # (Phase 7) Pydantic v2 request/response schemas
 │
@@ -54,14 +55,17 @@ amazon_project/
 │   ├── test_ranker.py                 # (Phase 4) Ranker feature pipeline and LGBMRanker tests
 │   ├── test_two_tower.py              # (Phase 5) Two-Tower contrastive model & retrieval tests
 │   ├── test_llm_layer.py              # (Phase 6) LLM explanation generation & query rewriting tests
-│   └── test_ci_workflow.py            # (Phase 9) GitHub Actions CI & scheduled retrain workflow tests
+│   ├── test_ci_workflow.py            # (Phase 9) GitHub Actions CI & scheduled retrain workflow tests
+│   └── test_observability.py          # (Phase 10) Structured JSON telemetry & Docker healthcheck tests
 │
 ├── .github/workflows/                 # CI/CD & automation workflows
 │   ├── ci.yml                         # (Phase 9) Full CI pipeline (lint, test, smoke-retrain, build, deploy-on-tag)
 │   ├── scheduled_retrain.yml          # (Phase 9) Cron & dispatch scheduled dvc repro pipeline
 │   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
 │
-├── web/                               # (Phase 8) Next.js 14 frontend application
+├── web/                               # (Phase 8/10) Next.js 14 frontend application
+│   ├── Dockerfile                     # Multi-stage production container for Next.js 14 runner
+│   ├── .dockerignore                  # Docker build exclusions for web
 │   ├── app/                           # App Router pages & routes
 │   │   ├── page.tsx                   # Home: Personalized & trending recommendation rails
 │   │   ├── layout.tsx                 # Root layout & navigation shell

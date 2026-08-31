@@ -139,7 +139,7 @@ async def lifespan(app: FastAPI):
         if os.path.exists(parquet_path):
             df = pd.read_parquet(parquet_path)
         elif os.path.exists(csv_path):
-            df = pd.read_csv(csv_path)
+            df = pd.read_csv(csv_path, low_memory=False)
 
         if df is not None:
             # Group by parent_asin / item_id and aggregate review statistics
@@ -1134,9 +1134,10 @@ async def create_event(req: EventCreateRequest):
 
 
 # -----------------------------------------------------------------------------
-# GET /v2/health
+# GET /v2/health & GET /health
 # -----------------------------------------------------------------------------
 @app.get("/v2/health", response_model=HealthResponse, tags=["health"])
+@app.get("/health", response_model=HealthResponse, tags=["health"], include_in_schema=False)
 async def health():
     """
     Health check covering all subsystem connections.

@@ -32,6 +32,9 @@ COPY src/ ./src/
 # Copy API package
 COPY api/ ./api/
 
+# Ensure runtime directories exist
+RUN mkdir -p logs outputs
+
 # Expose the service port
 EXPOSE 8000
 

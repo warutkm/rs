@@ -17,10 +17,14 @@ services:
       - REDIS_PORT=6379
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-admin_secret_key_recsys_2026}
+      - LLM_MODEL=${LLM_MODEL:-gemini-3.5-flash-lite}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
       - ./data:/app/data:ro
       - ./models:/app/models:ro
       - ./embeddings:/app/embeddings:ro
+      - ./logs:/app/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,11 +34,13 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/v2/health')"]
+      interval: 15s
+      timeout: 5s
       retries: 3
-      start_period: 40s
+      start_period: 35s
+    networks:
+      - recsys_net
 
   postgres:
     image: postgres:16-alpine
@@ -53,6 +59,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - recsys_net
 
   redis:
     image: redis:7-alpine
@@ -67,6 +75,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - recsys_net
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -78,10 +88,40 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333' || exit 1"]
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/6333' || curl -s -f http://localhost:6333/healthz || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - recsys_net
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: recsys_web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - recsys_net
+
+networks:
+  recsys_net:
+    driver: bridge
 
 volumes:
   postgres_data:

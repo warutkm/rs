@@ -119,6 +119,14 @@ class MetricsCollector:
             "cache_hit_rate": cache_stats["cache_hit_rate"],
         }
 
+    def reset(self):
+        """Reset all recorded latencies and request counters."""
+        self.latencies.clear()
+        self.endpoint_counts.clear()
+        self.status_counts.clear()
+        self.total_requests = 0
+
 
 # Global metrics collector singleton
 metrics_collector = MetricsCollector()
+

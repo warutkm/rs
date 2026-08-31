@@ -391,7 +391,7 @@ them get lost either. Revisit at the phase noted, or opportunistically if you're
 - [x] FastAPI v2 endpoints pass `api/test_api.py` (extend v1's tests)
 - [x] Next.js frontend hits the live API, shows personalization changing per demo user
 - [x] GitHub Actions CI green on push
-- [ ] Tier 0 `docker-compose up` starts everything
+- [x] Tier 0 `docker-compose up` starts everything
 - [ ] Tier 1 deployed, public URL works
 - [ ] `10_ab_comparison.ipynb` re-run with Ranker (+ two-tower if built) added as new systems
 - [ ] `11_mlflow_report.ipynb` re-exported with all runs including `Ranker`

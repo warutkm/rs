@@ -138,6 +138,14 @@ def get_cache_stats() -> Dict[str, Any]:
     }
 
 
+def reset_cache_stats():
+    """Resets cache hits, misses, and in-memory cache dictionary."""
+    global _cache_hits, _cache_misses
+    _cache_hits = 0
+    _cache_misses = 0
+    _memory_cache.clear()
+
+
 def format_explanation_key(user_id: str, item_id: str, model_version: str = config.MODEL_VERSION) -> str:
     """Generate cache key for item explanation."""
     return f"explanation:{user_id}:{item_id}:{model_version}"
