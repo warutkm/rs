@@ -32,7 +32,7 @@ import re
 import time
 import logging
 import asyncio
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Dict, List, Optional, Tuple, Union
 from pydantic import BaseModel, Field
 
 # Setup paths
@@ -57,11 +57,13 @@ if not logger.handlers:
 # 1. STRUCTURED SCHEMAS
 # =====================================================================
 
+
 class FeatureExplanationInput(BaseModel):
     """
     Input payload for generating recommendation explanation.
     `item_id` MUST be parent_asin per GEMINI.md hard rule.
     """
+
     user_id: str
     item_id: str  # parent_asin
     title: Optional[str] = ""
@@ -77,12 +79,16 @@ class ItemExplanation(BaseModel):
     """
     Structured output explanation for a recommended item.
     """
+
     user_id: str
     item_id: str  # parent_asin
     explanation: str
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     source: str = "llm"  # "llm", "cache", "rule_fallback", "cold_start"
-    dominant_factor: Optional[str] = None  # e.g., "collaborative_filtering", "frequently_bought_together", "content_similarity", "popularity", "price_match"
+    dominant_factor: Optional[str] = (
+        None  # e.g., "collaborative_filtering", "frequently_bought_together",
+        # "content_similarity", "popularity", "price_match"
+    )
     cached: bool = False
     model_version: str = config.MODEL_VERSION
 
@@ -91,13 +97,16 @@ class ParsedQuery(BaseModel):
     """
     Structured output for free-text search query understanding & rewriting.
     """
+
     raw_query: str
     rewritten_query: str
     category: Optional[str] = None
     price_min: Optional[float] = None
     price_max: Optional[float] = None
     brand: Optional[str] = None
-    intent: str = "product_search"  # "product_search", "category_browse", "brand_search", "comparison", "feature_search"
+    intent: str = (
+        "product_search"  # "product_search", "category_browse", "brand_search", "comparison", "feature_search"
+    )
     extracted_attributes: List[str] = Field(default_factory=list)
     source: str = "llm"  # "llm", "rule_fallback"
 
@@ -107,33 +116,38 @@ class ParsedQuery(BaseModel):
 # =====================================================================
 
 EXPLANATION_SYSTEM_INSTRUCTION = """You are an expert e-commerce recommendation explainer for an Amazon product catalog.
-Given a user ID, item ID, product metadata, and the underlying ranker feature signals, produce a single concise, truthful, customer-facing sentence (max 25 words) explaining why this item is recommended.
+Given a user ID, item ID, product metadata, and underlying ranker feature signals, produce a single concise,
+truthful, customer-facing sentence (max 25 words) explaining why this item is recommended.
 
 Signal definitions:
-- Collaborative filtering (als_score, svdpp_score, mf_score, ncf_score): High value means shoppers with tastes similar to the user loved or bought this item.
-- Content similarity (content_score): High value means the item closely matches the style, category, or features of items the user interacted with.
-- Association lift (apriori_lift): High value means this item is frequently bought together with the user's past items.
-- Popularity & helpful votes (popularity, helpful_votes): High value indicates a category best-seller with trusted community feedback.
+- Collaborative filtering (als_score, svdpp_score, mf_score, ncf_score): High value means shoppers with
+  tastes similar to the user loved or bought this item.
+- Content similarity (content_score): High value means the item closely matches the style, category, or features
+  of items the user interacted with.
+- Association lift (apriori_lift): High value means this item is frequently bought together with past items.
+- Popularity & helpful votes (popularity, helpful_votes): Category best-seller with trusted community feedback.
 - Price score (price_score): High value indicates the item falls directly in the user's preferred budget tier.
 
 Rules:
 1. Ground the explanation strictly in the dominant feature signals.
 2. Never mention internal technical variable names (e.g. do not say 'als_score', 'NCF', or 'LambdaMART').
 3. Keep the tone warm, concise, and customer-centric.
-4. Output MUST be valid JSON with keys: 'explanation' (string), 'dominant_factor' (string), 'confidence' (float between 0.0 and 1.0).
+4. Output MUST be valid JSON with keys: 'explanation' (string), 'dominant_factor' (string), 'confidence' (float).
 """
 
-QUERY_PARSER_SYSTEM_INSTRUCTION = """You are an e-commerce search query understanding and semantic rewriting engine for an Amazon product catalog.
+QUERY_PARSER_SYSTEM_INSTRUCTION = """You are an e-commerce search query understanding and semantic rewriting engine
+for an Amazon product catalog.
 Catalog categories: Video_Games, Musical_Instruments, Software.
 
 Given a user's raw search query:
-1. 'rewritten_query': Generate a clean, descriptive semantic search string optimized for embedding retrieval (e5 model). Remove conversational noise, price constraints, and filler words.
-2. 'category': Map to one of ["Video_Games", "Musical_Instruments", "Software"] if mentioned or strongly implied; otherwise null.
+1. 'rewritten_query': Clean, descriptive semantic search string optimized for embedding retrieval (e5 model).
+   Remove conversational noise, price constraints, and filler words.
+2. 'category': Map to one of ["Video_Games", "Musical_Instruments", "Software"] if mentioned or implied; else null.
 3. 'price_min': Extract minimum price floor as float, or null.
 4. 'price_max': Extract maximum price ceiling as float, or null.
 5. 'brand': Extract brand/publisher if explicitly named, or null.
 6. 'intent': One of ["product_search", "category_browse", "brand_search", "comparison", "feature_search"].
-7. 'extracted_attributes': List of key product attributes or specifications (e.g. ["wireless", "noise-canceling", "low-latency", "mechanical"]).
+7. 'extracted_attributes': List of key product attributes or specifications (e.g. ["wireless", "mechanical"]).
 
 Output MUST be valid JSON matching the schema.
 """
@@ -142,6 +156,7 @@ Output MUST be valid JSON matching the schema.
 # =====================================================================
 # 3. REDIS CACHING INTEGRATION LAYER
 # =====================================================================
+
 
 class ExplanationCache:
     """
@@ -178,6 +193,7 @@ class ExplanationCache:
     def _init_redis(self):
         try:
             import redis
+
             if self.url:
                 self._redis_client = redis.from_url(self.url, decode_responses=True)
             else:
@@ -202,6 +218,7 @@ class ExplanationCache:
         if self._async_redis_client is None:
             try:
                 import redis.asyncio as aioredis
+
                 if self.url:
                     self._async_redis_client = aioredis.from_url(self.url, decode_responses=True)
                 else:
@@ -273,7 +290,9 @@ class ExplanationCache:
         self._in_memory_cache[key] = (payload, time.time() + ttl)
         return True
 
-    async def get_async(self, user_id: str, item_id: str, model_version: str = config.MODEL_VERSION) -> Optional[ItemExplanation]:
+    async def get_async(
+        self, user_id: str, item_id: str, model_version: str = config.MODEL_VERSION
+    ) -> Optional[ItemExplanation]:
         """Asynchronous cache retrieval."""
         key = self.make_key(user_id, item_id, model_version)
         client = await self._get_async_client()
@@ -324,14 +343,18 @@ class ExplanationCache:
         self._in_memory_cache[key] = (payload, time.time() + ttl)
         return True
 
-    def get_batch(self, items: List[Tuple[str, str]], model_version: str = config.MODEL_VERSION) -> Dict[Tuple[str, str], Optional[ItemExplanation]]:
+    def get_batch(
+        self, items: List[Tuple[str, str]], model_version: str = config.MODEL_VERSION
+    ) -> Dict[Tuple[str, str], Optional[ItemExplanation]]:
         """Batch synchronous lookup."""
         result = {}
         for uid, iid in items:
             result[(uid, iid)] = self.get(uid, iid, model_version)
         return result
 
-    async def get_batch_async(self, items: List[Tuple[str, str]], model_version: str = config.MODEL_VERSION) -> Dict[Tuple[str, str], Optional[ItemExplanation]]:
+    async def get_batch_async(
+        self, items: List[Tuple[str, str]], model_version: str = config.MODEL_VERSION
+    ) -> Dict[Tuple[str, str], Optional[ItemExplanation]]:
         """Batch asynchronous lookup."""
         result = {}
         keys = [self.make_key(uid, iid, model_version) for uid, iid in items]
@@ -402,6 +425,7 @@ class ExplanationCache:
 # 4. DETERMINISTIC FEATURE-GROUNDED RULE FALLBACKS
 # =====================================================================
 
+
 def generate_rule_based_explanation(inp: FeatureExplanationInput) -> ItemExplanation:
     """
     Deterministic rule-based explanation generation directly grounded in ranker features.
@@ -418,20 +442,39 @@ def generate_rule_based_explanation(inp: FeatureExplanationInput) -> ItemExplana
     content_score = f.get("content_score", 0.0)
     popularity = f.get("popularity", 0.0)
     price_score = f.get("price_score", 0.0)
-    helpful_votes = f.get("helpful_votes", 0.0)
 
     # Determine dominant factor by highest weighted normalized signal
     signals = [
-        ("frequently_bought_together", apriori_lift * 1.5, f"Frequently bought together with products in your recent shopping activity."),
-        ("collaborative_filtering", cf_score * 1.3, f"Highly rated by shoppers who have similar taste and preferences to you."),
-        ("content_similarity", content_score * 1.2, f"Matches the features, specifications, and style of items you previously browsed."),
-        ("popularity", popularity * 1.0, f"A top-rated favorite and best-seller in its category with high customer satisfaction."),
-        ("price_match", price_score * 0.9, f"Carefully chosen to fit right within your preferred price and budget range."),
+        (
+            "frequently_bought_together",
+            apriori_lift * 1.5,
+            f"Frequently bought together with products in your recent shopping activity.",
+        ),
+        (
+            "collaborative_filtering",
+            cf_score * 1.3,
+            f"Highly rated by shoppers who have similar taste and preferences to you.",
+        ),
+        (
+            "content_similarity",
+            content_score * 1.2,
+            f"Matches the features, specifications, and style of items you previously browsed.",
+        ),
+        (
+            "popularity",
+            popularity * 1.0,
+            f"A top-rated favorite and best-seller in its category with high customer satisfaction.",
+        ),
+        (
+            "price_match",
+            price_score * 0.9,
+            f"Carefully chosen to fit right within your preferred price and budget range.",
+        ),
     ]
 
     # If item metadata is available, enrich the sentence
     cat_str = f" in {inp.category}" if inp.category else ""
-    
+
     # Sort signals descending by score
     signals.sort(key=lambda x: x[1], reverse=True)
     best_factor, best_score, default_template = signals[0]
@@ -474,7 +517,9 @@ def parse_query_rule_based(raw_query: str) -> ParsedQuery:
 
     # 1. Price extraction
     # Pattern: between $X and $Y / $X - $Y / X to Y dollars
-    range_match = re.search(r'(?:between\s+)?\$?(\d+(?:\.\d+)?)\s*(?:-|to|and)\s*\$?(\d+(?:\.\d+)?)\s*(?:dollars|\$)?', clean_query)
+    range_match = re.search(
+        r"(?:between\s+)?\$?(\d+(?:\.\d+)?)\s*(?:-|to|and)\s*\$?(\d+(?:\.\d+)?)\s*(?:dollars|\$)?", clean_query
+    )
     if range_match:
         try:
             p1, p2 = float(range_match.group(1)), float(range_match.group(2))
@@ -484,7 +529,7 @@ def parse_query_rule_based(raw_query: str) -> ParsedQuery:
 
     # Pattern: under/below/less than $X / < $X / max $X
     if price_max is None:
-        under_match = re.search(r'(?:under|below|less\s+than|<|max(?:imum)?)\s*\$?(\d+(?:\.\d+)?)', clean_query)
+        under_match = re.search(r"(?:under|below|less\s+than|<|max(?:imum)?)\s*\$?(\d+(?:\.\d+)?)", clean_query)
         if under_match:
             try:
                 price_max = float(under_match.group(1))
@@ -493,7 +538,7 @@ def parse_query_rule_based(raw_query: str) -> ParsedQuery:
 
     # Pattern: above/over/more than $X / > $X / min $X
     if price_min is None:
-        over_match = re.search(r'(?:above|over|more\s+than|>|min(?:imum)?)\s*\$?(\d+(?:\.\d+)?)', clean_query)
+        over_match = re.search(r"(?:above|over|more\s+than|>|min(?:imum)?)\s*\$?(\d+(?:\.\d+)?)", clean_query)
         if over_match:
             try:
                 price_min = float(over_match.group(1))
@@ -501,42 +546,90 @@ def parse_query_rule_based(raw_query: str) -> ParsedQuery:
                 pass
 
     # "cheap" / "budget" heuristic if no explicit price
-    if price_max is None and re.search(r'\b(cheap|budget|affordable|low cost)\b', clean_query):
+    if price_max is None and re.search(r"\b(cheap|budget|affordable|low cost)\b", clean_query):
         attributes.append("budget-friendly")
 
     # 2. Category mapping
-    video_games_kws = ["game", "games", "gaming", "ps5", "ps4", "xbox", "nintendo", "switch", "controller", "rpg", "fps"]
-    instruments_kws = ["guitar", "piano", "keyboard", "drum", "mic", "microphone", "pedal", "violin", "synth", "amplifier", "amp", "tuner"]
-    software_kws = ["software", "antivirus", "operating system", "editor", "photoshop", "cad", "tax", "suite", "utility", "driver"]
+    video_games_kws = [
+        "game",
+        "games",
+        "gaming",
+        "ps5",
+        "ps4",
+        "xbox",
+        "nintendo",
+        "switch",
+        "controller",
+        "rpg",
+        "fps",
+    ]
+    instruments_kws = [
+        "guitar",
+        "piano",
+        "keyboard",
+        "drum",
+        "mic",
+        "microphone",
+        "pedal",
+        "violin",
+        "synth",
+        "amplifier",
+        "amp",
+        "tuner",
+    ]
+    software_kws = [
+        "software",
+        "antivirus",
+        "operating system",
+        "editor",
+        "photoshop",
+        "cad",
+        "tax",
+        "suite",
+        "utility",
+        "driver",
+    ]
 
-    if any(re.search(rf'\b{kw}\b', clean_query) for kw in video_games_kws):
+    if any(re.search(rf"\b{kw}\b", clean_query) for kw in video_games_kws):
         category = "Video_Games"
-    elif any(re.search(rf'\b{kw}\b', clean_query) for kw in instruments_kws):
+    elif any(re.search(rf"\b{kw}\b", clean_query) for kw in instruments_kws):
         category = "Musical_Instruments"
-    elif any(re.search(rf'\b{kw}\b', clean_query) for kw in software_kws):
+    elif any(re.search(rf"\b{kw}\b", clean_query) for kw in software_kws):
         category = "Software"
 
     # 3. Attribute detection
     attr_kws = [
-        "wireless", "bluetooth", "noise-canceling", "noise cancelling",
-        "mechanical", "rgb", "usb-c", "portable", "vintage", "pro",
-        "acoustic", "electric", "multiplayer", "vr", "waterproof"
+        "wireless",
+        "bluetooth",
+        "noise-canceling",
+        "noise cancelling",
+        "mechanical",
+        "rgb",
+        "usb-c",
+        "portable",
+        "vintage",
+        "pro",
+        "acoustic",
+        "electric",
+        "multiplayer",
+        "vr",
+        "waterproof",
     ]
     for attr in attr_kws:
-        if re.search(rf'\b{re.escape(attr)}\b', clean_query):
+        if re.search(rf"\b{re.escape(attr)}\b", clean_query):
             attributes.append(attr)
 
     # 4. Brand detection
     brand_kws = ["sony", "microsoft", "nintendo", "yamaha", "fender", "gibson", "shure", "adobe", "logitech", "razer"]
     for b in brand_kws:
-        if re.search(rf'\b{b}\b', clean_query):
+        if re.search(rf"\b{b}\b", clean_query):
             brand = b.capitalize()
             break
 
     # 5. Intent detection
-    if re.search(r'\b(compare|vs|versus|difference)\b', clean_query):
+    if re.search(r"\b(compare|vs|versus|difference)\b", clean_query):
         intent = "comparison"
-    elif re.search(r'\b(browse|all|top|best|popular)\b', clean_query):
+    elif re.search(r"\b(browse|all|top|best|popular)\b", clean_query):
         intent = "category_browse"
     elif brand and len(clean_query.split()) <= 2:
         intent = "brand_search"
@@ -545,9 +638,15 @@ def parse_query_rule_based(raw_query: str) -> ParsedQuery:
 
     # 6. Rewritten query generation (strip filler words and price clauses)
     rewritten = query
-    rewritten = re.sub(r'(?i)(?:under|below|less than|above|over|between)\s*\$?\d+(?:\.\d+)?(?:\s*(?:and|to|-)\s*\$?\d+(?:\.\d+)?)?', '', rewritten)
-    rewritten = re.sub(r'(?i)\b(cheap|budget|affordable|show me|find me|looking for|recommend me|best|top)\b', '', rewritten)
-    rewritten = re.sub(r'\s+', ' ', rewritten).strip()
+    rewritten = re.sub(
+        r"(?i)(?:under|below|less than|above|over|between)\s*\$?\d+(?:\.\d+)?(?:\s*(?:and|to|-)\s*\$?\d+(?:\.\d+)?)?",
+        "",
+        rewritten,
+    )
+    rewritten = re.sub(
+        r"(?i)\b(cheap|budget|affordable|show me|find me|looking for|recommend me|best|top)\b", "", rewritten
+    )
+    rewritten = re.sub(r"\s+", " ", rewritten).strip()
 
     if not rewritten:
         rewritten = query
@@ -568,6 +667,7 @@ def parse_query_rule_based(raw_query: str) -> ParsedQuery:
 # =====================================================================
 # 5. GEMINI LLM CLIENT & ENGINE (GEMINI 3.5 FLASH-LITE)
 # =====================================================================
+
 
 class LLMLayer:
     """
@@ -595,6 +695,7 @@ class LLMLayer:
     def _init_gemini(self):
         try:
             import google.generativeai as genai
+
             genai.configure(api_key=self.api_key)
             self._genai_client = genai
             self._is_configured = True
@@ -862,6 +963,7 @@ class LLMLayer:
 # 6. MAIN EXECUTION DEMO / VALIDATION
 # =====================================================================
 
+
 def main():
     """
     Demonstrate and validate LLM layer features:
@@ -898,7 +1000,7 @@ def main():
                 "recency": 0.9,
                 "popularity": 0.8,
                 "helpful_votes": 0.75,
-            }
+            },
         ),
         FeatureExplanationInput(
             user_id="U_DEMO_02",
@@ -918,7 +1020,7 @@ def main():
                 "recency": 0.5,
                 "popularity": 0.6,
                 "helpful_votes": 0.5,
-            }
+            },
         ),
     ]
 
@@ -927,7 +1029,7 @@ def main():
         expl = llm.explain(inp)
         print(f"User: {expl.user_id} | Item: {expl.item_id}")
         print(f"Dominant Factor: {expl.dominant_factor} (Confidence: {expl.confidence})")
-        print(f"Explanation: \"{expl.explanation}\"")
+        print(f'Explanation: "{expl.explanation}"')
         print(f"Source: {expl.source} | Cached: {expl.cached}\n")
 
     # 2. Test Cache Hit on Second Fetch
@@ -947,7 +1049,10 @@ def main():
         parsed = llm.rewrite_query(q)
         print(f"Raw Query:      '{parsed.raw_query}'")
         print(f"Rewritten Query: '{parsed.rewritten_query}'")
-        print(f"Filters:         Category={parsed.category}, Price=[{parsed.price_min}, {parsed.price_max}], Brand={parsed.brand}")
+        print(
+            f"Filters:         Category={parsed.category}, "
+            f"Price=[{parsed.price_min}, {parsed.price_max}], Brand={parsed.brand}"
+        )
         print(f"Attributes:      {parsed.extracted_attributes} | Intent={parsed.intent}\n")
 
     print("✅ LLM layer validation completed successfully.")

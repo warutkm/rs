@@ -23,7 +23,6 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from tqdm import tqdm
 
 # Setup paths
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,6 +36,7 @@ import config
 
 # Unpickling hooks for custom classes
 import __main__
+
 try:
     _mod04 = importlib.import_module("04_apriori_recommender")
     __main__.AprioriRecommender = _mod04.AprioriRecommender
@@ -55,6 +55,7 @@ try:
     NCF = _mod06.NCF
     MF = _mod06.MF
 except Exception:
+
     class NCF(nn.Module):
         def __init__(self, n_users, n_items, emb_dim=64):
             super().__init__()
@@ -63,11 +64,7 @@ except Exception:
             self.user_emb_mlp = nn.Embedding(n_users, emb_dim)
             self.item_emb_mlp = nn.Embedding(n_items, emb_dim)
             self.mlp = nn.Sequential(
-                nn.Linear(emb_dim * 2, 64),
-                nn.ReLU(),
-                nn.Dropout(0.2),
-                nn.Linear(64, 32),
-                nn.ReLU()
+                nn.Linear(emb_dim * 2, 64), nn.ReLU(), nn.Dropout(0.2), nn.Linear(64, 32), nn.ReLU()
             )
             self.final = nn.Linear(emb_dim + 32, 1)
 
@@ -89,6 +86,7 @@ def load_candidate_models(user_map: dict, item_map: dict, device: str = "cpu"):
     # 1. ALS model
     if os.path.exists(config.ALS_MODEL_PATH):
         from implicit.als import AlternatingLeastSquares
+
         als_model = AlternatingLeastSquares(factors=64, iterations=20, regularization=0.1)
         models["als"] = als_model.load(config.ALS_MODEL_PATH)
         print(f"  [loaded] ALS model from {config.ALS_MODEL_PATH}")
@@ -133,6 +131,7 @@ def load_candidate_models(user_map: dict, item_map: dict, device: str = "cpu"):
     prod_pkl = os.path.join(config.MODELS_DIR, "product_recommender.pkl")
     if os.path.exists(prod_pkl):
         import dill
+
         with open(prod_pkl, "rb") as f:
             prod_rec = dill.load(f)
         models["prod_df"] = prod_rec.df
@@ -145,6 +144,7 @@ def load_candidate_models(user_map: dict, item_map: dict, device: str = "cpu"):
     apriori_pkl = os.path.join(config.MODELS_DIR, "apriori_recommender.pkl")
     if os.path.exists(apriori_pkl):
         import dill
+
         with open(apriori_pkl, "rb") as f:
             apriori_rec = dill.load(f)
         models["apriori_rules"] = apriori_rec.rule_dict
@@ -193,19 +193,25 @@ def sample_popularity_negatives(
                         break
 
         for neg_item in chosen:
-            neg_rows.append({
-                "user_id": user_id,
-                "item_id": neg_item,
-                "rating": 0.0,
-                "is_positive": 0,
-            })
+            neg_rows.append(
+                {
+                    "user_id": user_id,
+                    "item_id": neg_item,
+                    "rating": 0.0,
+                    "is_positive": 0,
+                }
+            )
 
     neg_df = pd.DataFrame(neg_rows)
     return neg_df
 
 
 def build_ranker_features(
-    interactions_df_path: str = config.TRAIN_PARQUET_PATH if hasattr(config, "TRAIN_PARQUET_PATH") else os.path.join(config.DATA_DIR, "train_df.parquet"),
+    interactions_df_path: str = (
+        config.TRAIN_PARQUET_PATH
+        if hasattr(config, "TRAIN_PARQUET_PATH")
+        else os.path.join(config.DATA_DIR, "train_df.parquet")
+    ),
     output_path: str = config.RANKER_TRAIN_PATH,
     n_negatives: int = 5,
     batch_size: int = 8192,
@@ -244,7 +250,7 @@ def build_ranker_features(
 
     # 3. Prepare item popularity weights for negative sampling
     all_item_ids = np.array(list(item_map.keys()))
-    
+
     # Calculate item counts from clean parquet or positive interactions
     if os.path.exists(config.CLEAN_PARQUET_PATH):
         clean_df = pd.read_parquet(config.CLEAN_PARQUET_PATH, columns=["item_id"])
@@ -273,11 +279,9 @@ def build_ranker_features(
     combined_df = pd.concat([pos_df[keep_cols], neg_df[keep_cols]], ignore_index=True)
 
     # Graded relevance label: rating for positive (1.0 to 5.0), 0.0 for negative
-    combined_df["relevance_label"] = np.where(
-        combined_df["is_positive"] == 1,
-        combined_df["rating"],
-        0.0
-    ).astype(np.float32)
+    combined_df["relevance_label"] = np.where(combined_df["is_positive"] == 1, combined_df["rating"], 0.0).astype(
+        np.float32
+    )
 
     # Map integer indices
     combined_df["user_idx"] = combined_df["user_id"].map(user_map).fillna(-1).astype(int)
@@ -363,10 +367,7 @@ def build_ranker_features(
 
     uids = combined_df["user_id"].values
     iids = combined_df["item_id"].values
-    apriori_lifts = np.array([
-        user_apriori_lifts.get(u, {}).get(i, 0.0)
-        for u, i in zip(uids, iids)
-    ], dtype=np.float32)
+    apriori_lifts = np.array([user_apriori_lifts.get(u, {}).get(i, 0.0) for u, i in zip(uids, iids)], dtype=np.float32)
     combined_df["apriori_lift"] = apriori_lifts
 
     # 12. Compute Content & Product Metadata features
@@ -381,14 +382,10 @@ def build_ranker_features(
             "hotness": 0.1,
             "price_score": 0.1,
         }
-        score_series = sum(
-            weights[col] * prod_df[col]
-            for col in weights
-            if col in prod_df.columns
-        )
+        score_series = sum(weights[col] * prod_df[col] for col in weights if col in prod_df.columns)
         prod_meta = prod_df.copy()
         prod_meta["content_score"] = score_series.astype(np.float32)
-        
+
         # Select required columns
         lookup_cols = ["content_score", "price_score", "recency", "popularity", "helpful_votes"]
         for c in lookup_cols:
@@ -452,7 +449,10 @@ def build_ranker_features(
     # 14. Save parquet
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     combined_df.to_parquet(output_path, index=False)
-    print(f"\n[Done] Exported {len(combined_df):,} feature rows for {combined_df['user_id'].nunique():,} users to {output_path}")
+    print(
+        f"\n[Done] Exported {len(combined_df):,} feature rows for "
+        f"{combined_df['user_id'].nunique():,} users to {output_path}"
+    )
     print(f"Features: {output_columns[2:-1]}")
     print(f"Relevance distribution:\n{combined_df['relevance_label'].value_counts().sort_index()}")
 

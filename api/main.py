@@ -20,9 +20,8 @@ import time
 import json
 import uuid
 import logging
-import asyncio
 from contextlib import asynccontextmanager
-from typing import List, Dict, Optional, Any, Union
+from typing import List, Dict, Optional, Any
 
 import numpy as np
 import pandas as pd
@@ -41,18 +40,28 @@ for _p in (BASE_DIR, API_DIR, SRC_DIR):
 
 import config
 from api.schemas import (
-    RecommendRequest, RecommendResponse, RecommendedItem,
+    RecommendRequest,
+    RecommendResponse,
+    RecommendedItem,
     SimilarResponse,
-    SearchResponse, SearchResult,
-    EventCreateRequest, EventResponse,
-    HealthResponse, MetricsResponse,
-    AdminRetrainRequest, AdminRetrainResponse, AdminRetrainStatusResponse,
+    SearchResponse,
+    SearchResult,
+    EventCreateRequest,
+    EventResponse,
+    HealthResponse,
+    MetricsResponse,
+    AdminRetrainRequest,
+    AdminRetrainResponse,
+    AdminRetrainStatusResponse,
 )
 from api.db import init_db_pool, close_db_pool, log_event, check_db_health
 from api.cache import (
-    init_redis_pool, close_redis_pool,
-    get_cached_explanation, set_cached_explanation,
-    get_cached_response, set_cached_response,
+    init_redis_pool,
+    close_redis_pool,
+    get_cached_explanation,
+    set_cached_explanation,
+    get_cached_response,
+    set_cached_response,
     check_redis_health,
 )
 from api.logging_config import configure_logging, metrics_collector
@@ -145,8 +154,14 @@ async def lifespan(app: FastAPI):
                     cat_raw = getattr(row, "main_category_meta", getattr(row, "main_category_rev", "General"))
                     cat = str(cat_raw).strip() if pd.notna(cat_raw) else "General"
                     price_val = float(getattr(row, "price", 19.99)) if pd.notna(getattr(row, "price", None)) else 19.99
-                    avg_rating = float(getattr(row, "average_rating", 4.0)) if pd.notna(getattr(row, "average_rating", None)) else 4.0
-                    rating_num = int(getattr(row, "rating_number", 10)) if pd.notna(getattr(row, "rating_number", None)) else 10
+                    avg_rating = (
+                        float(getattr(row, "average_rating", 4.0))
+                        if pd.notna(getattr(row, "average_rating", None))
+                        else 4.0
+                    )
+                    rating_num = (
+                        int(getattr(row, "rating_number", 10)) if pd.notna(getattr(row, "rating_number", None)) else 10
+                    )
 
                     meta_dict[iid] = {
                         "item_id": iid,
@@ -183,7 +198,9 @@ async def lifespan(app: FastAPI):
             state["item_meta"] = meta_dict
 
             # Build popularity lists
-            pop_series = df["parent_asin"].value_counts() if "parent_asin" in df.columns else df["item_id"].value_counts()
+            pop_series = (
+                df["parent_asin"].value_counts() if "parent_asin" in df.columns else df["item_id"].value_counts()
+            )
             state["popular_items"] = pop_series.index.tolist()[:500]
 
             cat_col = "main_category_meta" if "main_category_meta" in df.columns else "main_category_rev"
@@ -204,6 +221,7 @@ async def lifespan(app: FastAPI):
     # 4. Load LightGBM LambdaMART Ranker
     try:
         import pickle
+
         if os.path.exists(config.LGBM_RANKER_PKL_PATH):
             with open(config.LGBM_RANKER_PKL_PATH, "rb") as f:
                 state["ranker"] = pickle.load(f)
@@ -211,6 +229,7 @@ async def lifespan(app: FastAPI):
             logger.info(f"[OK] LGBMRanker loaded from {config.LGBM_RANKER_PKL_PATH}.")
         elif os.path.exists(config.LGBM_RANKER_PATH):
             import lightgbm as lgb
+
             booster = lgb.Booster(model_file=config.LGBM_RANKER_PATH)
             state["ranker"] = booster
             state["ranker_loaded"] = True
@@ -222,6 +241,7 @@ async def lifespan(app: FastAPI):
     try:
         if os.path.exists(config.ALS_MODEL_PATH):
             import implicit
+
             als = implicit.als.AlternatingLeastSquares()
             als_data = np.load(config.ALS_MODEL_PATH, allow_pickle=True)
             als.user_factors = als_data["user_factors"]
@@ -234,6 +254,7 @@ async def lifespan(app: FastAPI):
     try:
         if os.path.exists(config.SVDPP_MODEL_PATH):
             import pickle
+
             with open(config.SVDPP_MODEL_PATH, "rb") as f:
                 state["svdpp_model"] = pickle.load(f)
             logger.info("[OK] Candidate Model: SVD++ loaded.")
@@ -242,6 +263,7 @@ async def lifespan(app: FastAPI):
 
     try:
         import torch
+
         if os.path.exists(config.MF_MODEL_PATH):
             mf_state = torch.load(config.MF_MODEL_PATH, map_location="cpu")
             state["mf_u_emb"] = mf_state["user_emb.weight"].cpu().numpy()
@@ -256,6 +278,7 @@ async def lifespan(app: FastAPI):
         apriori_path = os.path.join(config.MODELS_DIR, "apriori_recommender.pkl")
         if os.path.exists(apriori_path):
             import dill
+
             with open(apriori_path, "rb") as f:
                 ap_rec = dill.load(f)
             state["apriori_rules"] = ap_rec.rule_dict
@@ -279,6 +302,7 @@ async def lifespan(app: FastAPI):
         bm25_path = os.path.join(config.EMBEDDINGS_DIR, "bm25_corpus.json")
         if os.path.exists(bm25_path):
             from rank_bm25 import BM25Okapi
+
             with open(bm25_path, "r", encoding="utf-8") as f:
                 bm25_data = json.load(f)
             state["bm25_ids"] = bm25_data["item_ids"]
@@ -290,6 +314,7 @@ async def lifespan(app: FastAPI):
     # 7. Initialize Qdrant ANN Client
     try:
         from pipeline.sync_embeddings import get_qdrant_client
+
         state["qdrant_client"] = get_qdrant_client()
         state["qdrant_loaded"] = True
         logger.info("[OK] Qdrant ANN client initialized.")
@@ -299,6 +324,7 @@ async def lifespan(app: FastAPI):
     # 8. Initialize LLM Layer
     try:
         import importlib
+
         _llm_mod = importlib.import_module("14_llm_layer")
         state["llm_layer"] = _llm_mod.LLMLayer(api_key=config.GEMINI_API_KEY, model_name=config.LLM_MODEL)
         logger.info("[OK] LLM Layer initialized (Gemini 3.5 Flash-Lite).")
@@ -308,6 +334,7 @@ async def lifespan(app: FastAPI):
     # 9. Load SentenceTransformer Embedder
     try:
         from sentence_transformers import SentenceTransformer
+
         state["embedder"] = SentenceTransformer("intfloat/e5-base-v2")
         logger.info("[OK] SentenceTransformer (e5-base-v2) loaded.")
     except Exception as e:
@@ -332,6 +359,7 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
 
 class TracingAndMetricsMiddleware(BaseHTTPMiddleware):
     """
@@ -381,7 +409,13 @@ app.add_middleware(TracingAndMetricsMiddleware)
 # Add CORSMiddleware on the outside so it handles preflights and adds headers
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000", "*"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "*",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -391,6 +425,7 @@ app.add_middleware(
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
 
 def _normalize_category(cat: Optional[str]) -> str:
     """Normalize category strings by stripping whitespace, underscores, and lowercasing."""
@@ -442,7 +477,6 @@ def _retrieve_candidates(
     Returns: (candidate_item_ids, is_cold_start, primary_source)
     """
     user_map = state.get("user_map", {})
-    item_map = state.get("item_map", {})
     rev_item_map = state.get("rev_item_map", {})
     candidates: List[str] = []
     seen = set()
@@ -508,7 +542,11 @@ def _retrieve_candidates(
                 pool = items_list
                 break
         if not pool:
-            pool = [iid for iid, meta in state.get("item_meta", {}).items() if _matches_category(meta.get("category"), category_filter)]
+            pool = [
+                iid
+                for iid, meta in state.get("item_meta", {}).items()
+                if _matches_category(meta.get("category"), category_filter)
+            ]
     else:
         pool = state.get("popular_items", [])
 
@@ -532,10 +570,7 @@ def _retrieve_candidates(
 
     # Apply category filtering if specified
     if category_filter and not _matches_category("all", category_filter):
-        filtered = [
-            c for c in candidates
-            if _matches_category(_get_item_metadata(c).get("category"), category_filter)
-        ]
+        filtered = [c for c in candidates if _matches_category(_get_item_metadata(c).get("category"), category_filter)]
         if filtered:
             candidates = filtered
 
@@ -543,14 +578,17 @@ def _retrieve_candidates(
     if product_type and product_type.strip():
         pt_clean = product_type.lower().strip()
         filtered_pt = [
-            c for c in candidates
+            c
+            for c in candidates
             if pt_clean in _get_item_metadata(c).get("title", "").lower()
             or pt_clean in _get_item_metadata(c).get("category", "").lower()
         ]
         # Supplement from full catalog if filtered candidate count is low
         if len(filtered_pt) < 15:
             for cand, meta in state.get("item_meta", {}).items():
-                if cand not in seen and (pt_clean in meta.get("title", "").lower() or pt_clean in meta.get("category", "").lower()):
+                if cand not in seen and (
+                    pt_clean in meta.get("title", "").lower() or pt_clean in meta.get("category", "").lower()
+                ):
                     if category_filter and not _matches_category(meta.get("category"), category_filter):
                         continue
                     filtered_pt.append(cand)
@@ -634,10 +672,7 @@ def _compute_ranker_features(user_id: str, candidate_ids: List[str]) -> tuple[np
     # Convert to dict representation for LLM explanation generation
     feat_names = config.RANKER_FEATURES
     for i in range(n_cands):
-        feature_dicts.append({
-            feat_names[j]: float(features_matrix[i, j])
-            for j in range(len(feat_names))
-        })
+        feature_dicts.append({feat_names[j]: float(features_matrix[i, j]) for j in range(len(feat_names))})
 
     return features_matrix, feature_dicts
 
@@ -660,6 +695,7 @@ async def _background_cache_explanation(
 
     try:
         import importlib
+
         llm_mod = importlib.import_module("14_llm_layer")
         inp = llm_mod.FeatureExplanationInput(
             user_id=user_id,
@@ -690,10 +726,10 @@ async def _background_cache_explanation(
         logger.warning(f"[Background Task] Error caching explanation for {item_id}: {e}")
 
 
-
 # =============================================================================
 # ENDPOINTS
 # =============================================================================
+
 
 @app.get("/", tags=["root"])
 async def root():
@@ -750,10 +786,9 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
 
     # 3. Scoring Strategy: Satisfaction Score or LambdaMART Ranker
     if req.sort_by == "satisfaction":
-        scores = np.array([
-            _get_item_metadata(iid).get("satisfaction_score", 0.0)
-            for iid in candidates
-        ], dtype=np.float32)
+        scores = np.array(
+            [_get_item_metadata(iid).get("satisfaction_score", 0.0) for iid in candidates], dtype=np.float32
+        )
         source_type = "satisfaction_ranker"
     else:
         # LightGBM LambdaMART Ranking
@@ -769,7 +804,7 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
             scores = features_mat[:, 0] + features_mat[:, 2] + features_mat[:, 4]
 
     # Sort descending
-    ranked_indices = np.argsort(-scores)[:req.top_k]
+    ranked_indices = np.argsort(-scores)[: req.top_k]
 
     results: List[RecommendedItem] = []
     for idx in ranked_indices:
@@ -788,7 +823,9 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
             if req.sort_by == "satisfaction":
                 sat_sc = meta.get("satisfaction_score", score_val)
                 v_rate = meta.get("verified_rate", 0.9)
-                explanation_text = f"Top satisfaction score ({sat_sc:.2f}) with {v_rate*100:.0f}% verified customer reviews."
+                explanation_text = (
+                    f"Top satisfaction score ({sat_sc:.2f}) with {v_rate*100:.0f}% verified customer reviews."
+                )
             elif feats.get("als_score", 0) > 0.4 or feats.get("ncf_score", 0) > 0.4:
                 explanation_text = f"High collaborative match with your previous activity in {cat}."
             elif feats.get("apriori_lift", 0) > 1.1:
@@ -813,17 +850,19 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
         raw_feats = feature_dicts[idx] if idx < len(feature_dicts) else {}
         clean_signals = {k: round(float(v), 4) for k, v in raw_feats.items()} if raw_feats else None
 
-        results.append(RecommendedItem(
-            item_id=iid,
-            title=meta.get("title", iid),
-            score=round(score_val, 6),
-            source=source_type,
-            category=meta.get("category"),
-            price=meta.get("price"),
-            average_rating=meta.get("average_rating"),
-            explanation=explanation_text,
-            feature_signals=clean_signals,
-        ))
+        results.append(
+            RecommendedItem(
+                item_id=iid,
+                title=meta.get("title", iid),
+                score=round(score_val, 6),
+                source=source_type,
+                category=meta.get("category"),
+                price=meta.get("price"),
+                average_rating=meta.get("average_rating"),
+                explanation=explanation_text,
+                feature_signals=clean_signals,
+            )
+        )
 
     resp = RecommendResponse(
         user_id=req.user_id,
@@ -864,7 +903,10 @@ async def similar(
         category=target_meta.get("category"),
         price=target_meta.get("price"),
         average_rating=target_meta.get("average_rating"),
-        explanation=f"Top product in {target_meta.get('category', 'Amazon Catalog')} with {target_meta.get('rating_number', 10)} customer ratings.",
+        explanation=(
+            f"Top product in {target_meta.get('category', 'Amazon Catalog')} "
+            f"with {target_meta.get('rating_number', 10)} customer ratings."
+        ),
     )
 
     # 1. Try Qdrant client
@@ -872,6 +914,7 @@ async def similar(
     if qdrant_client is not None:
         try:
             from pipeline.sync_embeddings import query_similar_items
+
             ann_points = query_similar_items(
                 client=qdrant_client,
                 item_id=item_id,
@@ -882,15 +925,17 @@ async def similar(
             for pt in ann_points:
                 iid = pt.get("item_id")
                 if iid and iid != item_id:
-                    results.append(RecommendedItem(
-                        item_id=iid,
-                        title=pt.get("title") or iid,
-                        score=round(float(pt.get("score", 0.0)), 6),
-                        source="qdrant_ann",
-                        category=pt.get("category"),
-                        price=pt.get("price"),
-                        average_rating=pt.get("average_rating"),
-                    ))
+                    results.append(
+                        RecommendedItem(
+                            item_id=iid,
+                            title=pt.get("title") or iid,
+                            score=round(float(pt.get("score", 0.0)), 6),
+                            source="qdrant_ann",
+                            category=pt.get("category"),
+                            price=pt.get("price"),
+                            average_rating=pt.get("average_rating"),
+                        )
+                    )
             if results:
                 return SimilarResponse(item_id=item_id, target_item=target_item, results=results[:top_k])
         except Exception as e:
@@ -907,15 +952,17 @@ async def similar(
             for cand in pool:
                 if cand != item_id:
                     meta = _get_item_metadata(cand)
-                    results.append(RecommendedItem(
-                        item_id=cand,
-                        title=meta.get("title", cand),
-                        score=0.85,
-                        source="category_fallback",
-                        category=meta.get("category"),
-                        price=meta.get("price"),
-                        average_rating=meta.get("average_rating"),
-                    ))
+                    results.append(
+                        RecommendedItem(
+                            item_id=cand,
+                            title=meta.get("title", cand),
+                            score=0.85,
+                            source="category_fallback",
+                            category=meta.get("category"),
+                            price=meta.get("price"),
+                            average_rating=meta.get("average_rating"),
+                        )
+                    )
                     if len(results) == top_k:
                         break
             return SimilarResponse(item_id=item_id, target_item=target_item, results=results)
@@ -943,15 +990,17 @@ async def similar(
         if price_ceiling is not None and (meta.get("price") or 0.0) > price_ceiling:
             continue
 
-        results.append(RecommendedItem(
-            item_id=iid,
-            title=meta.get("title", iid),
-            score=round(float(sims[i]), 6),
-            source="product_vecs_cosine",
-            category=meta.get("category"),
-            price=meta.get("price"),
-            average_rating=meta.get("average_rating"),
-        ))
+        results.append(
+            RecommendedItem(
+                item_id=iid,
+                title=meta.get("title", iid),
+                score=round(float(sims[i]), 6),
+                source="product_vecs_cosine",
+                category=meta.get("category"),
+                price=meta.get("price"),
+                average_rating=meta.get("average_rating"),
+            )
+        )
         if len(results) == top_k:
             break
 
@@ -1037,16 +1086,18 @@ async def search(
         if parsed_price_max is not None and (meta.get("price") or 0.0) > parsed_price_max:
             continue
 
-        results.append(SearchResult(
-            item_id=iid,
-            title=meta.get("title", iid),
-            category=meta.get("category"),
-            price=meta.get("price"),
-            average_rating=meta.get("average_rating"),
-            hybrid_score=round(float(hybrid_scores[i]), 6),
-            emb_score=round(float(emb_norm[i]), 6),
-            bm25_score=round(float(bm25_align[i]), 6),
-        ))
+        results.append(
+            SearchResult(
+                item_id=iid,
+                title=meta.get("title", iid),
+                category=meta.get("category"),
+                price=meta.get("price"),
+                average_rating=meta.get("average_rating"),
+                hybrid_score=round(float(hybrid_scores[i]), 6),
+                emb_score=round(float(emb_norm[i]), 6),
+                bm25_score=round(float(bm25_align[i]), 6),
+            )
+        )
         if len(results) == top_k:
             break
 

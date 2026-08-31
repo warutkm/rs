@@ -12,17 +12,14 @@ Unit and integration tests for Phase 5 (Two-Tower Retrieval Model):
 """
 
 import os
-import sys
-import json
+import importlib
 import pytest
-import numpy as np
 import pandas as pd
 import torch
 import mlflow
 
 import config
 
-import importlib
 _mod_tt = importlib.import_module("src.13_two_tower")
 TowerMLP = _mod_tt.TowerMLP
 TwoTowerModel = _mod_tt.TwoTowerModel
@@ -120,10 +117,12 @@ def test_retrieval_metrics_evaluation_logic():
     item_feats = torch.eye(n_items, emb_dim)
 
     # Ground truth: user 0 matches item 0, user 1 matches item 1, etc.
-    test_df = pd.DataFrame({
-        "user_idx": [0, 1, 2, 3],
-        "item_idx": [0, 1, 2, 3],
-    })
+    test_df = pd.DataFrame(
+        {
+            "user_idx": [0, 1, 2, 3],
+            "item_idx": [0, 1, 2, 3],
+        }
+    )
 
     metrics = evaluate_retrieval_metrics(
         model=model,
@@ -191,9 +190,7 @@ def test_two_tower_retriever_inference_and_cold_start():
 
     # 3. Session-based retrieval from interacted items
     sample_items = list(retriever.item_map.keys())[:3]
-    session_recs = retriever.retrieve_candidates(
-        interacted_items=sample_items, top_k=5, exclude_items=sample_items
-    )
+    session_recs = retriever.retrieve_candidates(interacted_items=sample_items, top_k=5, exclude_items=sample_items)
     assert len(session_recs) == 5
     for r in session_recs:
         assert r["item_id"] not in sample_items, "Excluded interacted items should not appear in candidate list"

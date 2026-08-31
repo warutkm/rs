@@ -11,10 +11,8 @@ Unit and integration tests for Phase 4:
 """
 
 import os
-import sys
-import json
 import pickle
-import pytest
+import importlib
 import numpy as np
 import pandas as pd
 import lightgbm as lgb
@@ -22,7 +20,6 @@ import mlflow
 
 import config
 
-import importlib
 _mod_features = importlib.import_module("src.12_ranker_features")
 sample_popularity_negatives = _mod_features.sample_popularity_negatives
 
@@ -72,11 +69,13 @@ def test_ranker_train_parquet_exists_and_schema():
 
 def test_popularity_negative_sampling():
     """Verify popularity-weighted negative sampling excludes positive items and produces correct counts."""
-    pos_data = pd.DataFrame({
-        "user_id": ["u1", "u1", "u2", "u3"],
-        "item_id": ["i1", "i2", "i2", "i3"],
-        "rating": [5.0, 4.0, 5.0, 3.0],
-    })
+    pos_data = pd.DataFrame(
+        {
+            "user_id": ["u1", "u1", "u2", "u3"],
+            "item_id": ["i1", "i2", "i2", "i3"],
+            "rating": [5.0, 4.0, 5.0, 3.0],
+        }
+    )
     all_items = np.array(["i1", "i2", "i3", "i4", "i5", "i6", "i7", "i8"])
     weights = np.ones(len(all_items)) / len(all_items)
 
@@ -154,19 +153,21 @@ def test_ranker_service_serving_and_cold_start():
     service = RankerService(model_path=config.LGBM_RANKER_PATH)
     assert service.booster is not None
 
-    candidates_df = pd.DataFrame({
-        "item_id": ["item_A", "item_B", "item_C"],
-        "als_score": [1.2, 0.5, 0.1],
-        "svdpp_score": [4.5, 4.0, 3.2],
-        "mf_score": [1.0, 0.8, 0.2],
-        "ncf_score": [4.8, 3.9, 3.0],
-        "content_score": [2.5, 2.8, 1.9],
-        "apriori_lift": [10.0, 0.0, 0.0],
-        "price_score": [0.8, 0.6, 0.5],
-        "recency": [0.9, 0.7, 0.4],
-        "popularity": [3.5, 4.0, 2.1],
-        "helpful_votes": [25.0, 50.0, 5.0],
-    })
+    candidates_df = pd.DataFrame(
+        {
+            "item_id": ["item_A", "item_B", "item_C"],
+            "als_score": [1.2, 0.5, 0.1],
+            "svdpp_score": [4.5, 4.0, 3.2],
+            "mf_score": [1.0, 0.8, 0.2],
+            "ncf_score": [4.8, 3.9, 3.0],
+            "content_score": [2.5, 2.8, 1.9],
+            "apriori_lift": [10.0, 0.0, 0.0],
+            "price_score": [0.8, 0.6, 0.5],
+            "recency": [0.9, 0.7, 0.4],
+            "popularity": [3.5, 4.0, 2.1],
+            "helpful_votes": [25.0, 50.0, 5.0],
+        }
+    )
 
     # Warm user ranking
     ranked_warm = service.rank(candidates_df, is_cold_start_user=False)

@@ -1,0 +1,27 @@
+[flake8]
+max-line-length = 120
+extend-ignore = E203, W503, E402, F541
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    venv,
+    data,
+    embeddings,
+    models,
+    mlflow,
+    outputs,
+    logs,
+    web,
+    src/01_data_ingestion.py,
+    src/02_preprocessing.py,
+    src/03_sentiment_nlp.py,
+    src/03_b_t5_summarization.py,
+    src/04_apriori_recommender.py,
+    src/05_content_cf_recommender.py,
+    src/06_mf_ncf_pytorch.py,
+    src/07_semantic_search.py,
+    src/08_hybrid_engine.py,
+    src/09_als_svdpp.py,
+    src/10_ab_comparison.ipynb,
+    src/11_mlflow_report.ipynb

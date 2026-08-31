@@ -11,7 +11,7 @@ import os
 import sys
 import json
 import logging
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from datetime import datetime, timezone
 
 # Setup paths
@@ -59,10 +59,15 @@ async def init_db_pool() -> bool:
 
     dsn = config.POSTGRES_URL
     if not dsn:
-        dsn = f"postgresql://{config.POSTGRES_USER}:{config.POSTGRES_PASSWORD}@{config.POSTGRES_HOST}:{config.POSTGRES_PORT}/{config.POSTGRES_DB}"
+        dsn = (
+            f"postgresql://{config.POSTGRES_USER}:{config.POSTGRES_PASSWORD}@"
+            f"{config.POSTGRES_HOST}:{config.POSTGRES_PORT}/{config.POSTGRES_DB}"
+        )
 
     try:
-        logger.info(f"[DB] Connecting to PostgreSQL at {config.POSTGRES_HOST}:{config.POSTGRES_PORT}/{config.POSTGRES_DB} ...")
+        logger.info(
+            f"[DB] Connecting to PostgreSQL at {config.POSTGRES_HOST}:{config.POSTGRES_PORT}/{config.POSTGRES_DB} ..."
+        )
         _pool = await asyncpg.create_pool(
             dsn=dsn,
             min_size=1,
@@ -133,9 +138,7 @@ async def log_event(
             RETURNING id;
             """
             async with _pool.acquire() as conn:
-                event_id = await conn.fetchval(
-                    query, user_id, str(item_id), event_type, rating, meta_json, created_at
-                )
+                event_id = await conn.fetchval(query, user_id, str(item_id), event_type, rating, meta_json, created_at)
             return {
                 "status": "ok",
                 "event_id": event_id,

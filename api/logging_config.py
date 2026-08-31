@@ -12,7 +12,7 @@ import json
 import logging
 from datetime import datetime, timezone
 from collections import deque
-from typing import Dict, Any, List
+from typing import Dict, Any
 import numpy as np
 
 from api.cache import get_cache_stats
@@ -21,6 +21,7 @@ from api.cache import get_cache_stats
 # =============================================================================
 # STRUCTURED JSON LOGGING FORMATTER
 # =============================================================================
+
 
 class JSONFormatter(logging.Formatter):
     """
@@ -66,6 +67,7 @@ def configure_logging(level: int = logging.INFO):
 # =============================================================================
 # METRICS COLLECTOR (JSON /metrics ENDPOINT)
 # =============================================================================
+
 
 class MetricsCollector:
     """

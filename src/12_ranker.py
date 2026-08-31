@@ -270,10 +270,16 @@ def train_ranker(
     # 6. Feature Importances
     importances = ranker.feature_importances_
     fi_dict = dict(zip(features, [float(i) for i in importances]))
-    fi_df = pd.DataFrame({
-        "feature": features,
-        "importance_gain": importances,
-    }).sort_values("importance_gain", ascending=False).reset_index(drop=True)
+    fi_df = (
+        pd.DataFrame(
+            {
+                "feature": features,
+                "importance_gain": importances,
+            }
+        )
+        .sort_values("importance_gain", ascending=False)
+        .reset_index(drop=True)
+    )
 
     print("\nFeature Importances (Gain):")
     for row in fi_df.itertuples():
@@ -325,7 +331,7 @@ def train_ranker(
         mlflow.log_artifact(fi_csv_path)
 
     print("Ranker MLflow logging complete.")
-    
+
     metrics = {
         "ndcg_at_10": val_ndcg,
         "map_at_10": val_map,

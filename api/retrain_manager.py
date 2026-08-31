@@ -123,9 +123,7 @@ class RetrainManager:
                 except Exception:
                     pass
 
-            self._thread = threading.Thread(
-                target=_monitor, args=(self.current_process, log_file), daemon=True
-            )
+            self._thread = threading.Thread(target=_monitor, args=(self.current_process, log_file), daemon=True)
             self._thread.start()
 
             return {

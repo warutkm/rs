@@ -24,6 +24,7 @@ def client():
 # RetrainManager UNIT TESTS
 # =============================================================================
 
+
 def test_retrain_manager_lifecycle(tmp_path):
     """Test RetrainManager execution lifecycle with a dummy command."""
     log_file = os.path.join(tmp_path, "test_retrain.log")
@@ -82,6 +83,7 @@ def test_retrain_manager_failure_handling(tmp_path):
 # =============================================================================
 # /admin/retrain API ENDPOINT TESTS
 # =============================================================================
+
 
 def test_admin_retrain_unauthorized(client):
     """POST /admin/retrain without API key must return 401."""
@@ -162,4 +164,3 @@ def test_admin_retrain_trigger_and_conflict(client, monkeypatch, tmp_path):
     r_status = client.get("/admin/retrain/status", headers=headers)
     assert r_status.status_code == 200
     assert r_status.json()["status"] == "completed"
-

@@ -11,13 +11,9 @@ Unit and integration tests for Phase 6 (LLM Explanations & Query Understanding L
   - Async batch execution with concurrency throttling & background caching
 """
 
-import os
-import sys
 import json
-import time
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 import config
 import importlib
@@ -37,6 +33,7 @@ QUERY_PARSER_SYSTEM_INSTRUCTION = _mod.QUERY_PARSER_SYSTEM_INSTRUCTION
 # =====================================================================
 # 1. STRUCTURED SCHEMA TESTS
 # =====================================================================
+
 
 def test_feature_explanation_input_schema():
     """Verify FeatureExplanationInput structure and item_id=parent_asin invariant."""
@@ -108,6 +105,7 @@ def test_parsed_query_schema():
 # 2. DETERMINISTIC RULE-BASED EXPLANATION TESTS
 # =====================================================================
 
+
 def test_rule_based_explanation_apriori_lift():
     """High apriori_lift should produce frequently_bought_together dominant factor."""
     inp = FeatureExplanationInput(
@@ -162,6 +160,7 @@ def test_rule_based_explanation_cold_start():
 # 3. QUERY UNDERSTANDING & REWRITING TESTS
 # =====================================================================
 
+
 def test_parse_query_price_under():
     """Test extraction of price ceiling (e.g. under $50)."""
     pq = parse_query_rule_based("wireless gaming mouse under $45")
@@ -198,6 +197,7 @@ def test_parse_query_empty():
 # =====================================================================
 # 4. REDIS & IN-MEMORY CACHE TESTS
 # =====================================================================
+
 
 def test_cache_key_format():
     """Verify cache key strictly follows 'explanation:{user_id}:{item_id}:{model_version}'."""
@@ -260,11 +260,13 @@ async def test_async_cache_operations():
     assert res1 is not None
     assert res1.explanation == "Async explanation 1"
 
-    batch_res = await cache.get_batch_async([
-        ("U_ASYNC_1", "B_ASYNC_1"),
-        ("U_ASYNC_2", "B_ASYNC_2"),
-        ("U_ASYNC_MISS", "B_ASYNC_MISS"),
-    ])
+    batch_res = await cache.get_batch_async(
+        [
+            ("U_ASYNC_1", "B_ASYNC_1"),
+            ("U_ASYNC_2", "B_ASYNC_2"),
+            ("U_ASYNC_MISS", "B_ASYNC_MISS"),
+        ]
+    )
     assert batch_res[("U_ASYNC_1", "B_ASYNC_1")] is not None
     assert batch_res[("U_ASYNC_2", "B_ASYNC_2")] is not None
     assert batch_res[("U_ASYNC_MISS", "B_ASYNC_MISS")] is None
@@ -273,6 +275,7 @@ async def test_async_cache_operations():
 # =====================================================================
 # 5. MOCK LLM GENERATION & PREFIX CACHING TESTS
 # =====================================================================
+
 
 def test_mock_llm_explanation_generation():
     """Test LLMLayer explanation generation with mocked Gemini response."""
@@ -286,11 +289,13 @@ def test_mock_llm_explanation_generation():
 
     mock_model = MagicMock()
     mock_resp = MagicMock()
-    mock_resp.text = json.dumps({
-        "explanation": "Because you recently purchased headphones, this amplifier offers the ideal power match.",
-        "dominant_factor": "frequently_bought_together",
-        "confidence": 0.95,
-    })
+    mock_resp.text = json.dumps(
+        {
+            "explanation": "Because you recently purchased headphones, this amplifier offers the ideal power match.",
+            "dominant_factor": "frequently_bought_together",
+            "confidence": 0.95,
+        }
+    )
     mock_model.generate_content.return_value = mock_resp
 
     mock_genai = MagicMock()
@@ -325,16 +330,18 @@ def test_mock_llm_query_rewriting():
 
     mock_model = MagicMock()
     mock_resp = MagicMock()
-    mock_resp.text = json.dumps({
-        "raw_query": "budget overdrive for electric guitar < $50",
-        "rewritten_query": "overdrive pedal electric guitar",
-        "category": "Musical_Instruments",
-        "price_min": None,
-        "price_max": 50.0,
-        "brand": None,
-        "intent": "product_search",
-        "extracted_attributes": ["overdrive", "budget"],
-    })
+    mock_resp.text = json.dumps(
+        {
+            "raw_query": "budget overdrive for electric guitar < $50",
+            "rewritten_query": "overdrive pedal electric guitar",
+            "category": "Musical_Instruments",
+            "price_min": None,
+            "price_max": 50.0,
+            "brand": None,
+            "intent": "product_search",
+            "extracted_attributes": ["overdrive", "budget"],
+        }
+    )
     mock_model.generate_content.return_value = mock_resp
 
     mock_genai = MagicMock()
@@ -382,6 +389,7 @@ def test_llm_exception_fallback():
 # 6. ASYNC BATCH & BACKGROUND CACHING TESTS
 # =====================================================================
 
+
 @pytest.mark.asyncio
 async def test_async_batch_explanation_concurrency():
     """Test explain_batch_async with multiple candidate inputs."""
@@ -390,8 +398,7 @@ async def test_async_batch_explanation_concurrency():
     llm = LLMLayer(cache=cache, use_mock=True)
 
     inputs = [
-        FeatureExplanationInput(user_id=f"U_{i}", item_id=f"B_{i}", features={"popularity": 0.8})
-        for i in range(5)
+        FeatureExplanationInput(user_id=f"U_{i}", item_id=f"B_{i}", features={"popularity": 0.8}) for i in range(5)
     ]
 
     results = await llm.explain_batch_async(inputs, use_cache=True, concurrency=3)

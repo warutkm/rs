@@ -5,11 +5,8 @@ Validates syntax, structure, triggers, and steps of .github/workflows/retrain.ym
 
 import os
 import yaml
-import pytest
 
-WORKFLOW_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "retrain.yml")
-)
+WORKFLOW_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".github", "workflows", "retrain.yml"))
 
 
 def test_workflow_file_exists():
@@ -24,7 +21,7 @@ def test_workflow_valid_yaml_syntax():
 
     assert isinstance(data, dict), "Workflow YAML must parse as a dictionary."
     assert "name" in data, "Workflow must have a 'name' field."
-    assert ("on" in data or True in data), "Workflow must define 'on' triggers."
+    assert "on" in data or True in data, "Workflow must define 'on' triggers."
     assert "jobs" in data, "Workflow must define 'jobs'."
 
 

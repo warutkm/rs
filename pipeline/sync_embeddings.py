@@ -67,7 +67,7 @@ def get_qdrant_client(
         return QdrantClient(url=url, api_key=api_key)
     if QDRANT_URL:
         return QdrantClient(url=QDRANT_URL, api_key=api_key or QDRANT_API_KEY)
-    
+
     target_host = host or QDRANT_HOST
     target_port = port or QDRANT_PORT
     return QdrantClient(host=target_host, port=target_port, api_key=api_key or QDRANT_API_KEY)
@@ -96,22 +96,25 @@ def load_embeddings_and_metadata(
         item_ids = json.load(f)
 
     if len(embeds) != len(item_ids):
-        raise ValueError(
-            f"Dimension mismatch: {len(embeds)} embedding vectors vs {len(item_ids)} item IDs."
-        )
+        raise ValueError(f"Dimension mismatch: {len(embeds)} embedding vectors vs {len(item_ids)} item IDs.")
 
     print(f"[3/4] Building metadata lookup from {parquet_path} ...")
     meta_lookup: Dict[str, Dict[str, Any]] = {}
     if os.path.exists(parquet_path):
         df = pd.read_parquet(parquet_path)
-        
+
         # Deduplicate per item_id (parent_asin) taking first non-null properties
         grouped = df.groupby("item_id").first().reset_index()
         for _, row in grouped.iterrows():
             iid = str(row["item_id"])
             title = str(row.get("title_meta", "") or row.get("title_rev", "") or "")
-            category = str(row.get("main_category_meta", "") or row.get("main_category_rev", "") or row.get("main_category", "") or "")
-            
+            category = str(
+                row.get("main_category_meta", "")
+                or row.get("main_category_rev", "")
+                or row.get("main_category", "")
+                or ""
+            )
+
             try:
                 price = float(row.get("price", 0.0))
                 if np.isnan(price):
@@ -303,13 +306,9 @@ def search_similar_items(
 
     filter_conditions = []
     if category_filter:
-        filter_conditions.append(
-            FieldCondition(key="category", match=MatchValue(value=category_filter))
-        )
+        filter_conditions.append(FieldCondition(key="category", match=MatchValue(value=category_filter)))
     if price_ceiling is not None:
-        filter_conditions.append(
-            FieldCondition(key="price", range=Range(lte=price_ceiling))
-        )
+        filter_conditions.append(FieldCondition(key="price", range=Range(lte=price_ceiling)))
 
     query_filter = Filter(must=filter_conditions) if filter_conditions else None
 
@@ -377,7 +376,7 @@ def verify_sync(
 
     print(f"\n[ANN Search Test 1: Unfiltered Nearest Neighbors]")
     print(f"Query Item: [{sample_iid}] {sample_title} (Category: {sample_cat})")
-    
+
     top_items = search_similar_items(
         client=client,
         query_vector=sample_vector,

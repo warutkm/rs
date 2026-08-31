@@ -390,7 +390,7 @@ them get lost either. Revisit at the phase noted, or opportunistically if you're
 - [x] LLM explanations cached in Redis, cache-hit rate visible in `/metrics`
 - [x] FastAPI v2 endpoints pass `api/test_api.py` (extend v1's tests)
 - [x] Next.js frontend hits the live API, shows personalization changing per demo user
-- [ ] GitHub Actions CI green on push
+- [x] GitHub Actions CI green on push
 - [ ] Tier 0 `docker-compose up` starts everything
 - [ ] Tier 1 deployed, public URL works
 - [ ] `10_ab_comparison.ipynb` re-run with Ranker (+ two-tower if built) added as new systems

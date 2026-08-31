@@ -9,6 +9,8 @@ amazon_project/
 ├── AI_BUILD_PROMPT.md                 # Per-phase build prompt templates
 ├── config.py                          # Global paths, hyperparameters, constants
 ├── requirements.txt                   # Pinned project dependencies
+├── pyproject.toml                     # Black formatting, pytest, and tool configuration
+├── .flake8                            # Flake8 style & exclusion rules
 ├── docker-compose.yml                 # Local multi-service stack (api, postgres, redis, qdrant)
 ├── dvc.yaml                           # DVC pipeline DAG definition
 ├── dvc.lock                           # DVC lockfile
@@ -51,9 +53,12 @@ amazon_project/
 │   ├── test_model_artifacts.py        # (Phase 3) Model binary persistence and MLflow tracking tests
 │   ├── test_ranker.py                 # (Phase 4) Ranker feature pipeline and LGBMRanker tests
 │   ├── test_two_tower.py              # (Phase 5) Two-Tower contrastive model & retrieval tests
-│   └── test_llm_layer.py              # (Phase 6) LLM explanation generation & query rewriting tests
+│   ├── test_llm_layer.py              # (Phase 6) LLM explanation generation & query rewriting tests
+│   └── test_ci_workflow.py            # (Phase 9) GitHub Actions CI & scheduled retrain workflow tests
 │
 ├── .github/workflows/                 # CI/CD & automation workflows
+│   ├── ci.yml                         # (Phase 9) Full CI pipeline (lint, test, smoke-retrain, build, deploy-on-tag)
+│   ├── scheduled_retrain.yml          # (Phase 9) Cron & dispatch scheduled dvc repro pipeline
 │   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
 │
 ├── web/                               # (Phase 8) Next.js 14 frontend application

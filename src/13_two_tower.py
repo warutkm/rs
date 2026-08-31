@@ -24,7 +24,7 @@ import os
 import sys
 import json
 import time
-from typing import Dict, List, Tuple, Optional, Any, Union
+from typing import Dict, List, Tuple, Optional, Any
 import numpy as np
 import pandas as pd
 import torch
@@ -47,6 +47,7 @@ import config
 # ===========================================================================
 # 1. Dataset & Feature Preparation
 # ===========================================================================
+
 
 def build_fused_features(
     train_df_path: str = "data/train_df.parquet",
@@ -107,17 +108,21 @@ def build_fused_features(
     mf_sd = torch.load(mf_model_path, map_location="cpu", weights_only=True)
     ncf_sd = torch.load(ncf_model_path, map_location="cpu", weights_only=True)
 
-    user_cf = np.hstack([
-        mf_sd["user_emb.weight"].cpu().numpy(),       # (n_users, 64)
-        ncf_sd["user_emb_gmf.weight"].cpu().numpy(),   # (n_users, 64)
-        ncf_sd["user_emb_mlp.weight"].cpu().numpy(),   # (n_users, 64)
-    ]).astype(np.float32)
+    user_cf = np.hstack(
+        [
+            mf_sd["user_emb.weight"].cpu().numpy(),  # (n_users, 64)
+            ncf_sd["user_emb_gmf.weight"].cpu().numpy(),  # (n_users, 64)
+            ncf_sd["user_emb_mlp.weight"].cpu().numpy(),  # (n_users, 64)
+        ]
+    ).astype(np.float32)
 
-    item_cf = np.hstack([
-        mf_sd["item_emb.weight"].cpu().numpy(),       # (n_items, 64)
-        ncf_sd["item_emb_gmf.weight"].cpu().numpy(),   # (n_items, 64)
-        ncf_sd["item_emb_mlp.weight"].cpu().numpy(),   # (n_items, 64)
-    ]).astype(np.float32)
+    item_cf = np.hstack(
+        [
+            mf_sd["item_emb.weight"].cpu().numpy(),  # (n_items, 64)
+            ncf_sd["item_emb_gmf.weight"].cpu().numpy(),  # (n_items, 64)
+            ncf_sd["item_emb_mlp.weight"].cpu().numpy(),  # (n_items, 64)
+        ]
+    ).astype(np.float32)
 
     # 5. Concatenate CF + Text features
     user_features = np.hstack([user_cf, user_text_mat]).astype(np.float32)
@@ -130,6 +135,7 @@ class InteractionDataset(Dataset):
     """
     PyTorch Dataset of positive (user_idx, item_idx) interaction pairs.
     """
+
     def __init__(self, u_indices: np.ndarray, i_indices: np.ndarray):
         self.u_indices = torch.tensor(u_indices, dtype=torch.long)
         self.i_indices = torch.tensor(i_indices, dtype=torch.long)
@@ -145,11 +151,13 @@ class InteractionDataset(Dataset):
 # 2. PyTorch Two-Tower Architecture
 # ===========================================================================
 
+
 class TowerMLP(nn.Module):
     """
     Multi-Layer Perceptron Tower with Batch Normalization, ReLU activations,
     Dropout regularization, and L2 projection normalization.
     """
+
     def __init__(
         self,
         input_dim: int = 960,
@@ -179,6 +187,7 @@ class TwoTowerModel(nn.Module):
     PyTorch Two-Tower Retrieval Model for Amazon RecSys v2.
     Learns dense representations for Users and Items in a shared metric space.
     """
+
     def __init__(
         self,
         user_input_dim: int = 960,
@@ -207,9 +216,7 @@ class TwoTowerModel(nn.Module):
             output_dim=output_dim,
             dropout=dropout,
         )
-        self.temperature = nn.Parameter(
-            torch.tensor(temperature, dtype=torch.float32), requires_grad=False
-        )
+        self.temperature = nn.Parameter(torch.tensor(temperature, dtype=torch.float32), requires_grad=False)
 
     def encode_user(self, user_features: torch.Tensor) -> torch.Tensor:
         """Projects user feature vectors to L2-normalized embedding space."""
@@ -219,9 +226,7 @@ class TwoTowerModel(nn.Module):
         """Projects item feature vectors to L2-normalized embedding space."""
         return self.item_tower(item_features)
 
-    def forward(
-        self, user_features: torch.Tensor, item_features: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, user_features: torch.Tensor, item_features: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Forward pass encoding both user and item representations."""
         user_emb = self.encode_user(user_features)
         item_emb = self.encode_item(item_features)
@@ -232,12 +237,13 @@ class TwoTowerModel(nn.Module):
 # 3. Loss Function & Evaluation Metrics
 # ===========================================================================
 
+
 def in_batch_contrastive_loss(
     user_emb: torch.Tensor, item_emb: torch.Tensor, temperature: float = 0.07
 ) -> torch.Tensor:
     """
     Computes symmetric InfoNCE contrastive loss with in-batch negatives.
-    
+
     Args:
         user_emb: (batch_size, emb_dim) L2-normalized user vectors
         item_emb: (batch_size, emb_dim) L2-normalized item vectors
@@ -339,6 +345,7 @@ def evaluate_retrieval_metrics(
 # ===========================================================================
 # 4. Training Pipeline & MLflow Logging
 # ===========================================================================
+
 
 def train_two_tower(
     epochs: int = 10,
@@ -444,7 +451,11 @@ def train_two_tower(
         scheduler.step()
         avg_loss = total_loss / max(n_batches, 1)
         history_loss.append(avg_loss)
-        print(f"  Epoch {epoch:2d}/{epochs:2d} | In-Batch Contrastive Loss: {avg_loss:.4f} | LR: {scheduler.get_last_lr()[0]:.6f}")
+        print(
+            f"  Epoch {epoch:2d}/{epochs:2d} | "
+            f"In-Batch Contrastive Loss: {avg_loss:.4f} | "
+            f"LR: {scheduler.get_last_lr()[0]:.6f}"
+        )
 
     train_time = time.time() - t_start
     print(f"Training completed in {train_time:.2f}s.")
@@ -497,21 +508,23 @@ def train_two_tower(
 
     print(f"Logging to MLflow experiment '{config.MLFLOW_EXPERIMENT}' as 'TwoTower'...")
     with mlflow.start_run(run_name="TwoTower"):
-        mlflow.log_params({
-            "model_type": "TwoTowerRetrieval",
-            "user_input_dim": user_input_dim,
-            "item_input_dim": item_input_dim,
-            "hidden_dims": json.dumps(hidden_dims),
-            "output_dim": output_dim,
-            "dropout": dropout,
-            "temperature": temperature,
-            "epochs": epochs,
-            "batch_size": batch_size,
-            "lr": lr,
-            "weight_decay": weight_decay,
-            "n_users": n_users,
-            "n_items": n_items,
-        })
+        mlflow.log_params(
+            {
+                "model_type": "TwoTowerRetrieval",
+                "user_input_dim": user_input_dim,
+                "item_input_dim": item_input_dim,
+                "hidden_dims": json.dumps(hidden_dims),
+                "output_dim": output_dim,
+                "dropout": dropout,
+                "temperature": temperature,
+                "epochs": epochs,
+                "batch_size": batch_size,
+                "lr": lr,
+                "weight_decay": weight_decay,
+                "n_users": n_users,
+                "n_items": n_items,
+            }
+        )
         for metric_name, val in metrics.items():
             mlflow.log_metric(metric_name, val)
 
@@ -525,11 +538,13 @@ def train_two_tower(
 # 5. Serving & Inference Service
 # ===========================================================================
 
+
 class TwoTowerRetriever:
     """
     Serving and candidate generation service using the trained TwoTowerModel.
     Supports warm and cold-start user/item retrieval.
     """
+
     def __init__(
         self,
         model_path: str = "models/two_tower.pth",
@@ -661,11 +676,13 @@ class TwoTowerRetriever:
             item_id = self.idx_to_item[int(idx)]
             if item_id in exclude_set:
                 continue
-            results.append({
-                "item_id": item_id,
-                "score": float(scores[idx]),
-                "source": "two_tower",
-            })
+            results.append(
+                {
+                    "item_id": item_id,
+                    "score": float(scores[idx]),
+                    "source": "two_tower",
+                }
+            )
             if len(results) >= top_k:
                 break
 
@@ -675,6 +692,7 @@ class TwoTowerRetriever:
 # ===========================================================================
 # 6. Main Script Execution
 # ===========================================================================
+
 
 def main():
     config.create_dirs()

@@ -16,7 +16,7 @@ Tests:
 
 import os
 import sys
-import json
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 
@@ -212,11 +212,15 @@ def test_admin_retrain_auth(client):
 
 def test_category_filter_normalization(client):
     """Test category filter with spaces vs underscores (Video Games vs Video_Games)."""
-    r = client.post("/v2/recommend", json={
-        "user_id": "guest_cold_start",
-        "category_filter": "Video Games",
-        "top_k": 5,
-    })
+    uid = f"cold_start_cat_{uuid.uuid4().hex[:6]}"
+    r = client.post(
+        "/v2/recommend",
+        json={
+            "user_id": uid,
+            "category_filter": "Video Games",
+            "top_k": 5,
+        },
+    )
     assert r.status_code == 200
     data = r.json()
     assert len(data["results"]) > 0
@@ -226,12 +230,16 @@ def test_category_filter_normalization(client):
 
 def test_product_type_satisfaction_ranking(client):
     """Test product_type search with review satisfaction ranking strategy."""
-    r = client.post("/v2/recommend", json={
-        "user_id": "guest_cold_start",
-        "product_type": "keyboard",
-        "sort_by": "satisfaction",
-        "top_k": 5,
-    })
+    uid = f"cold_start_pt_{uuid.uuid4().hex[:6]}"
+    r = client.post(
+        "/v2/recommend",
+        json={
+            "user_id": uid,
+            "product_type": "keyboard",
+            "sort_by": "satisfaction",
+            "top_k": 5,
+        },
+    )
     assert r.status_code == 200
     data = r.json()
     assert len(data["results"]) > 0
@@ -251,4 +259,3 @@ def test_similar_includes_target_item(client):
     assert data["target_item"]["item_id"] == sample_id
     assert data["target_item"]["price"] is not None
     assert data["target_item"]["average_rating"] is not None
-

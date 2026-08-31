@@ -1,0 +1,13 @@
+[tool.black]
+line-length = 120
+target-version = ['py311']
+extend-exclude = '''(?x)(^|[/\\])(data|embeddings|models|mlflow|outputs|logs|web|\.venv|\.git|01_data_ingestion\.py|02_preprocessing\.py|03_sentiment_nlp\.py|03_b_t5_summarization\.py|04_apriori_recommender\.py|05_content_cf_recommender\.py|06_mf_ncf_pytorch\.py|07_semantic_search\.py|08_hybrid_engine\.py|09_als_svdpp\.py|10_ab_comparison\.ipynb|11_mlflow_report\.ipynb)'''
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::UserWarning",
+]

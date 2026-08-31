@@ -15,7 +15,7 @@ import sys
 import json
 import time
 import logging
-from typing import Dict, Optional, Any, Union
+from typing import Dict, Optional, Any
 
 # Setup paths
 API_DIR = os.path.dirname(os.path.abspath(__file__))

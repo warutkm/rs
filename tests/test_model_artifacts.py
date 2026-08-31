@@ -3,11 +3,9 @@ import sys
 import pickle
 import json
 import numpy as np
-import scipy.sparse as sp
 import torch
 import pytest
 import mlflow
-import pandas as pd
 
 from config import (
     MODELS_DIR,
@@ -85,6 +83,7 @@ def test_load_and_infer_apriori():
     """Verify loading and inferring with AprioriRecommender."""
     path = os.path.join(MODELS_DIR, "apriori_recommender.pkl")
     import dill
+
     with open(path, "rb") as f:
         model = dill.load(f)
     assert hasattr(model, "recommend_apriori")
@@ -103,6 +102,7 @@ def test_load_and_infer_content_and_cf():
     import importlib
     import dill
     import __main__
+
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
     mod05 = importlib.import_module("05_content_cf_recommender")
     __main__.ProductRecommender = mod05.ProductRecommender
@@ -131,6 +131,7 @@ def test_load_and_infer_content_and_cf():
 def test_load_pytorch_models():
     """Verify loading PyTorch MF and NCF models."""
     import importlib
+
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
     mod06 = importlib.import_module("06_mf_ncf_pytorch")
     MF = mod06.MF
@@ -165,9 +166,6 @@ def test_load_pytorch_models():
 
 def test_load_als_and_svdpp():
     """Verify loading implicit ALS model and Surprise SVD++ model."""
-    from implicit.als import AlternatingLeastSquares
-
-    als = AlternatingLeastSquares(factors=64)
     # als_model.npz contains factors
     npz_data = np.load(ALS_MODEL_PATH)
     assert "user_factors" in npz_data or "item_factors" in npz_data

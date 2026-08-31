@@ -4,25 +4,19 @@ Unit and integration tests for Qdrant embedding sync pipeline and ANN retrieval.
 """
 
 import os
-import json
 import uuid
-import pytest
-import numpy as np
 import pandas as pd
 from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct
+from qdrant_client.models import PointStruct
 
 from pipeline.sync_embeddings import (
     item_id_to_point_id,
     init_collection,
     search_similar_items,
     verify_sync,
-    load_embeddings_and_metadata,
 )
 from config import (
     CLEAN_PARQUET_PATH,
-    META_EMBEDS_PATH,
-    META_ITEM_IDS_PATH,
     QDRANT_HOST,
     QDRANT_PORT,
     QDRANT_COLLECTION_NAME,
@@ -54,9 +48,36 @@ def test_in_memory_sync_and_search():
 
     # Insert mock items
     items = [
-        {"item_id": "ITEM_1", "vector": [1.0, 0.0, 0.0, 0.0], "payload": {"item_id": "ITEM_1", "title": "Guitar Pro", "category": "Musical_Instruments", "price": 100.0}},
-        {"item_id": "ITEM_2", "vector": [0.9, 0.1, 0.0, 0.0], "payload": {"item_id": "ITEM_2", "title": "Guitar Strings", "category": "Musical_Instruments", "price": 15.0}},
-        {"item_id": "ITEM_3", "vector": [0.0, 0.0, 1.0, 0.0], "payload": {"item_id": "ITEM_3", "title": "Antivirus 2026", "category": "Software", "price": 49.99}},
+        {
+            "item_id": "ITEM_1",
+            "vector": [1.0, 0.0, 0.0, 0.0],
+            "payload": {
+                "item_id": "ITEM_1",
+                "title": "Guitar Pro",
+                "category": "Musical_Instruments",
+                "price": 100.0,
+            },
+        },
+        {
+            "item_id": "ITEM_2",
+            "vector": [0.9, 0.1, 0.0, 0.0],
+            "payload": {
+                "item_id": "ITEM_2",
+                "title": "Guitar Strings",
+                "category": "Musical_Instruments",
+                "price": 15.0,
+            },
+        },
+        {
+            "item_id": "ITEM_3",
+            "vector": [0.0, 0.0, 1.0, 0.0],
+            "payload": {
+                "item_id": "ITEM_3",
+                "title": "Antivirus 2026",
+                "category": "Software",
+                "price": 49.99,
+            },
+        },
     ]
 
     points = [

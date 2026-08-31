@@ -1,0 +1,110 @@
+name: Scheduled Model Retraining
+
+"on":
+  schedule:
+    # Run weekly every Sunday at 02:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Force re-execution of all pipeline stages (--force)'
+        required: false
+        type: boolean
+        default: false
+      sync_qdrant:
+        description: 'Sync embeddings to Qdrant after training'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  retrain:
+    name: DVC Retrain & Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio
+
+      - name: Configure Git identity (for DVC pipeline execution)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Execute DVC Pipeline (dvc repro)
+        env:
+          MLFLOW_TRACKING_URI: "file:./mlflow"
+          MLFLOW_EXPERIMENT: "DS11-v2"
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+        run: |
+          mkdir -p logs
+          if [ "${{ inputs.force }}" = "true" ]; then
+            python -m dvc repro --force 2>&1 | tee logs/dvc_repro.log
+          else
+            python -m dvc repro 2>&1 | tee logs/dvc_repro.log
+          fi
+
+      - name: Validate Pipeline Artifacts
+        run: |
+          python -c "
+          import os, sys
+          critical_artifacts = [
+              'data/clean_merge_df.parquet',
+              'models/hybrid_recommender.pkl',
+              'models/als_model.npz',
+              'models/svdpp_model.pkl',
+              'models/product_recommender.pkl',
+              'models/cf_recommender.pkl',
+              'models/apriori_recommender.pkl',
+              'models/mf_model.pth',
+              'models/ncf_model.pth',
+              'embeddings/meta_embeds.npy',
+              'embeddings/product_vecs.npz'
+          ]
+          missing = [a for a in critical_artifacts if not os.path.exists(a) or os.path.getsize(a) == 0]
+          if missing:
+              print(f'❌ Artifact validation failed! Missing/empty artifacts: {missing}', file=sys.stderr)
+              sys.exit(1)
+          print(f'✅ All {len(critical_artifacts)} critical pipeline artifacts validated successfully.')
+          "
+
+      - name: Run Integration Tests
+        run: |
+          pytest
+
+      - name: Sync Vector Embeddings to Qdrant
+        if: ${{ inputs.sync_qdrant != false }}
+        env:
+          QDRANT_URL: ${{ secrets.QDRANT_URL }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
+          QDRANT_HOST: ${{ secrets.QDRANT_HOST || 'localhost' }}
+        run: |
+          if [ -n "$QDRANT_URL" ] || [ -n "$QDRANT_API_KEY" ]; then
+            echo "Syncing embeddings to Qdrant..."
+            python -m pipeline.sync_embeddings
+          else
+            echo "Skipping remote Qdrant sync (credentials not configured in repository secrets)."
+          fi
+
+      - name: Upload Retrain Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dvc-retrain-logs
+          path: logs/dvc_repro.log
+          if-no-files-found: ignore
