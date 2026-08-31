@@ -65,21 +65,25 @@ export default function ProductDetailPage() {
         setSimilarItems(simRes.results || []);
         setCoRecs(recRes.results || []);
 
-        // Use first similar item metadata to populate current product info if not yet cached
-        const found = simRes.results.find((i) => i.item_id === itemId);
-        if (found) {
-          setProduct(found);
+        // Populate current product info from target_item metadata
+        if (simRes.target_item) {
+          setProduct(simRes.target_item);
         } else {
-          setProduct({
-            item_id: itemId,
-            title: `Amazon Catalog Item (${itemId})`,
-            category: 'Electronics & Accessories',
-            price: 49.99,
-            average_rating: 4.6,
-            score: 1.0,
-            source: 'qdrant_ann',
-            explanation: 'Direct product lookup from vector index and metadata catalog.',
-          });
+          const found = simRes.results.find((i) => i.item_id === itemId);
+          if (found) {
+            setProduct(found);
+          } else {
+            setProduct({
+              item_id: itemId,
+              title: `Amazon Catalog Item (${itemId})`,
+              category: 'General',
+              price: 19.99,
+              average_rating: 4.0,
+              score: 1.0,
+              source: 'qdrant_ann',
+              explanation: 'Direct product lookup from vector index and metadata catalog.',
+            });
+          }
         }
       } catch (err) {
         console.error('Error fetching product data:', err);
@@ -177,7 +181,7 @@ export default function ProductDetailPage() {
                     <Star
                       key={star}
                       className={`w-4 h-4 ${
-                        star <= Math.round(product?.average_rating || 4.5)
+                        star <= Math.round(product?.average_rating ?? 0)
                           ? 'fill-current'
                           : 'text-slate-600'
                       }`}
@@ -185,12 +189,12 @@ export default function ProductDetailPage() {
                   ))}
                 </div>
                 <span className="text-sm font-bold text-slate-200">
-                  {(product?.average_rating || 4.5).toFixed(1)}
+                  {(product?.average_rating ?? 0).toFixed(1)}
                 </span>
               </div>
 
               <div className="text-2xl font-extrabold text-white">
-                ${(product?.price || 39.99).toFixed(2)}
+                ${(product?.price ?? 0).toFixed(2)}
               </div>
             </div>
 

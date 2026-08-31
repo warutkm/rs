@@ -147,13 +147,13 @@ export default function ProductCard({ item, rank, showScore = true }: ProductCar
           <div className="flex items-center gap-1 text-amber-400">
             <Star className="w-3.5 h-3.5 fill-current" />
             <span className="font-bold text-slate-200">
-              {(item.average_rating || 4.5).toFixed(1)}
+              {(item.average_rating ?? 0).toFixed(1)}
             </span>
             <span className="text-slate-500 text-[10px]">(Amazon Review)</span>
           </div>
 
           <div className="font-bold text-sm text-slate-100">
-            ${(item.price || 24.99).toFixed(2)}
+            ${(item.price ?? 0).toFixed(2)}
           </div>
         </div>
 
@@ -186,8 +186,9 @@ export default function ProductCard({ item, rank, showScore = true }: ProductCar
 
               {/* Feature Attribution Popover */}
               {showSignals && (
-                <div className="absolute right-0 bottom-full mb-2 w-64 p-3 rounded-xl bg-slate-900/95 border border-sky-500/40 shadow-2xl backdrop-blur-md z-50 animate-fadeIn text-slate-200">
+                <div className="absolute right-0 bottom-full mb-2 w-64 p-3.5 rounded-xl bg-[#070d19] border border-sky-500/60 shadow-2xl shadow-black z-50 animate-fadeIn text-slate-200">
                   <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-800">
+
                     <div className="flex items-center gap-1.5 text-xs font-bold text-sky-300">
                       <Sliders className="w-3.5 h-3.5 text-sky-400" />
                       <span>Model Feature Signals</span>

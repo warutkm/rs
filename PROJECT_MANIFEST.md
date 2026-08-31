@@ -38,9 +38,7 @@ amazon_project/
 │   ├── cache.py                       # (Phase 7) Async Redis explanation & response cache
 │   ├── logging_config.py              # (Phase 7) Structured JSON logging & /metrics counters
 │   ├── retrain_manager.py             # (Phase 2) Subprocess manager for DVC pipeline execution
-│   ├── schemas.py                     # (Phase 7) Pydantic v2 request/response schemas
-│   ├── test_api.py                    # Endpoint test script
-│   └── docker-compose.yml             # (Legacy v1 local compose - root compose is v2 standard)
+│   └── schemas.py                     # (Phase 7) Pydantic v2 request/response schemas
 │
 ├── pipeline/                          # (v2 target) Orchestration & background sync tasks
 │   └── sync_embeddings.py             # (Phase 1) Qdrant vector index synchronization

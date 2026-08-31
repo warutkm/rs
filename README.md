@@ -1,73 +1,89 @@
-# Enterprise Hybrid Recommender Platform (Amazon Reviews 2023)
+# Amazon RecSys v2 — Production Multi-Stage Hybrid Recommender Platform
 
 [![CI/CD Pipeline](https://github.com/warutkm/rs/actions/workflows/retrain.yml/badge.svg)](https://github.com/warutkm/rs/actions)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com)
+[![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org/)
 [![Qdrant](https://img.shields.io/badge/Qdrant-Vector%20DB-red.svg)](https://qdrant.tech/)
+[![LightGBM](https://img.shields.io/badge/LightGBM-LambdaMART-brightgreen.svg)](https://lightgbm.readthedocs.io/)
 [![DVC](https://img.shields.io/badge/DVC-Data%20Versioning-9cf.svg)](https://dvc.org/)
 [![MLflow](https://img.shields.io/badge/MLflow-Tracking-0194E2.svg)](https://mlflow.org/)
 
-A production-grade, two-stage **Retrieval → Ranking** hybrid recommendation engine trained on the **Amazon Reviews 2023** dataset (Video Games, Musical Instruments, and Software categories).
+An enterprise-grade, two-stage **Retrieval → Ranking → LLM Explanation** hybrid recommendation platform trained on the **Amazon Reviews 2023** dataset (Video Games, Musical Instruments, and Software categories; 44,301 catalog items and 12,569 customer profiles).
 
 ---
 
-## 1. System Architecture Overview
+## 1. System Architecture
 
 ```
-                         ┌─────────────────────────┐
-                         │        Frontend         │
-                         │    Next.js + Tailwind   │
-                         └────────────┬────────────┘
-                                      │ REST / JSON
-                         ┌────────────▼────────────┐
-                         │   FastAPI Async Server  │
-                         │ Auth · Rate Limit · Log │
-                         └────────────┬────────────┘
-                                      │
-                    ┌─────────────────▼───────────────────┐
-                    │  Query Rewrite — Gemini Flash-Lite  │
-                    │  Structured Filter + Semantic Query │
-                    └─────────────────┬───────────────────┘
-                                      │
-                    ┌─────────────────▼───────────────────┐
-                    │           Retrieval Layer           │
-                    │  Qdrant HNSW (ANN) · ALS/SVD++/NCF  │
-                    │  e5 Dense Embeddings · Apriori Lift │
-                    └─────────────────┬───────────────────┘
-                                      │ Top ~200 candidates
-                    ┌─────────────────▼───────────────────┐
-                    │      Ranking Stage — LightGBM       │
-                    │             LambdaMART              │
-                    │  Multi-model scores, price, recency │
-                    └─────────────────┬───────────────────┘
-                                      │ Top 10-20 ranked
-                    ┌─────────────────▼───────────────────┐
-                    │   Explanation — Gemini Flash-Lite   │
-                    │   Async feature-grounded summary    │
-                    └─────────────────┬───────────────────┘
-                                      │
-      ┌───────────────────────┬───────┴───────────────┬───────────────────────┐
-      │                       │                       │                       │
-┌─────▼──────────────┐  ┌─────▼──────────────┐  ┌─────▼──────────────┐  ┌─────▼──────────────┐
-│    Upstash Redis   │  │   PostgreSQL DB    │  │ Qdrant Cloud / HNSW│  │  MLflow Registry   │
-│ Response/LLM Cache │  │ Users/Events/Logs  │  │ 44k item vectors   │  │ Staging → Prod Gate│
-└────────────────────┘  └────────────────────┘  └────────────────────┘  └────────────────────┘
+                                 ┌─────────────────────────────────┐
+                                 │     Next.js 14 Web Interface   │
+                                 │  Personalization · Search · Ops │
+                                 └────────────────┬────────────────┘
+                                                  │ REST / JSON (Async HTTP)
+                                 ┌────────────────▼────────────────┐
+                                 │      FastAPI Serving Engine     │
+                                 │  Tracing · Metrics · Lifespan   │
+                                 └────────────────┬────────────────┘
+                                                  │
+                 ┌────────────────────────────────┴────────────────────────────────┐
+                 │                                                                 │
+  ┌──────────────▼───────────────┐                                  ┌──────────────▼───────────────┐
+  │   Stage 1: Retrieval Layer   │                                  │   LLM Query Understanding    │
+  │  (ANN + Multi-Tower Models)  │                                  │   (Gemini 3.5 Flash-Lite)    │
+  │                              │                                  │                              │
+  │  • Qdrant HNSW ANN (e5-base) │                                  │  • Intent classification     │
+  │  • Implicit ALS (CF)         │                                  │  • Category/price extraction │
+  │  • Surprise SVD++            │                                  │  • Semantic query rewrite    │
+  │  • PyTorch Two-Tower Cosine  │                                  └──────────────┬───────────────┘
+  │  • PyTorch Matrix Fact. (MF) │                                                 │
+  │  • Apriori Co-occurrence     │                                                 │
+  └──────────────┬───────────────┘                                                 │
+                 │ Top ~150-200 Candidate Item IDs                                 │
+                 ├─────────────────────────────────────────────────────────────────┘
+                 │
+  ┌──────────────▼────────────────────────────────┐
+  │       Stage 2: Ranking Engine                 │
+  │       (LightGBM LambdaMART / NDCG@10)         │
+  │                                               │
+  │  10-Dimensional Real-time Feature Vector:     │
+  │  [ALS, SVD++, MF, NCF, Content, Apriori,      │
+  │   Price Affinity, Recency, Pop, Helpfulness]  │
+  └──────────────┬────────────────────────────────┘
+                 │ Top K Ranked Items (e.g. Top 8)
+  ┌──────────────▼────────────────────────────────┐
+  │       Stage 3: LLM Explanation Layer          │
+  │       (Gemini 3.5 Flash-Lite + Redis)         │
+  │                                               │
+  │  • Instant fallback & async Redis caching     │
+  │  • Feature-grounded 1-sentence explanations   │
+  └──────────────┬────────────────────────────────┘
+                 │
+  ┌──────────────┴───────────────┬───────────────────────────────┬───────────────────────────────┐
+  │                              │                               │                               │
+┌─▼────────────────────────────┐ ┌─▼───────────────────────────┐ ┌─▼───────────────────────────┐ ┌─▼───────────────────────────┐
+│     Upstash / Local Redis    │ │      PostgreSQL Database    │ │   Qdrant Vector Database    │ │     MLflow Model Registry   │
+│ Response & Explanation Cache │ │ Interaction & Feedback Log  │ │ 44,301 384-d e5 Embeddings  │ │ Experiment DS11-v2 Tracking │
+└──────────────────────────────┘ └─────────────────────────────┘ └─────────────────────────────┘ └─────────────────────────────┘
 ```
 
 ---
 
-## 2. Model Evolution & Core Technologies
+## 2. Multi-Stage Pipeline & Technology Stack
 
-| Stage | v1 Foundation (Complete) | v2 Enterprise Platform (Current Target) |
+| Layer | Implementation & Technologies | Key Capabilities |
 |---|---|---|
-| **Retrieval / ANN** | In-memory `product_vecs` dict & linear scan | **Qdrant Vector DB** (HNSW index, sub-10ms cosine search, payload filtering) |
-| **Ranking** | Hand-weighted heuristic union (`HybridRecommender`) | **Learned-to-Rank LightGBM LambdaMART** (`LGBMRanker`) on multi-model candidate features |
-| **Candidate Generators** | Standalone ALS, SVD++, PyTorch MF, PyTorch NCF, Apriori | Multi-tower candidate pool feeds Stage 2 ranker |
-| **Semantic Search** | `intfloat/e5-base-v2` dense + BM25 sparse hybrid | LLM query understanding + Qdrant hybrid retrieval |
-| **Explanations** | Static summaries (T5) | Dynamic **Gemini 3.5 Flash-Lite** explanations grounded in ranker feature vectors |
-| **Data Ingestion & DAG** | Python scripts with DVC stages | **DVC** pipeline DAG + GitHub Actions automated retrain workflow |
-| **Backend & Cache** | FastAPI synchronous prototype | Async FastAPI, **Redis** response/explanation cache, **PostgreSQL** events |
-| **Observability** | Console print statements | Structured JSON logging + `/metrics` endpoint (p50/p95/p99 latency, cache hit rate) |
+| **Frontend Web App** | Next.js 14 App Router, TypeScript, Tailwind CSS, Lucide Icons | Real-time persona switcher, live recommendation rails, review-satisfaction ranking, hybrid search, observability dashboard |
+| **Serving Backend** | FastAPI (Async), Pydantic v2, Starlette Middleware, Uvicorn | Sub-25ms response time, X-Request-ID distributed tracing, JSON `/metrics` latency percentiles |
+| **Vector Retrieval (ANN)** | Qdrant (HNSW Index), `intfloat/e5-base-v2` dense embeddings | Sub-5ms cosine similarity search across 44,301 products with payload filtering |
+| **Candidate Generators** | Implicit ALS, Surprise SVD++, PyTorch Matrix Factorization, PyTorch Neural CF, Apriori Association Rules | Collaborative, content, and frequent co-purchase candidate retrieval |
+| **Two-Tower Neural Retrieval** | PyTorch Dual-Encoder (User Tower & Item Tower) | High-throughput semantic & interaction space dot-product candidate retrieval |
+| **Ranking Engine** | LightGBM LambdaMART (`LGBMRanker`, NDCG@10 objective) | Re-ranks candidates using a 10-dimensional multi-model signal vector |
+| **LLM Reasoning & NLP** | Google Gemini 3.5 Flash-Lite, TF-IDF + SVM, T5 Summarization | Natural language search query parsing and feature-grounded recommendation rationale |
+| **Caching Layer** | Redis (`redis.asyncio`) with in-memory TTL fallback | Response caching (30s TTL) and explanation caching (24h TTL) |
+| **Telemetry & Storage** | PostgreSQL (asyncpg / psycopg2) | Logs user interactions (`click`, `view`, `purchase`, `rating`, `cart`) for retraining |
+| **Data & Pipeline DAG** | DVC (Data Version Control) | Deterministic, reproducible pipeline from raw ingestion to model evaluation (`dvc repro`) |
+| **MLOps & Tracking** | MLflow (`DS11-v2` experiment) | Tracks hyperparameters, validation NDCG, HitRate@K, Precision@K, and model binaries |
 
 ---
 
@@ -75,134 +91,198 @@ A production-grade, two-stage **Retrieval → Ranking** hybrid recommendation en
 
 ```
 .
-├── config.py                  # Centralized configuration, paths, hyperparameters
-├── requirements.txt           # Pinned production dependencies
-├── docker-compose.yml         # Local stack (FastAPI, PostgreSQL, Redis, Qdrant)
-├── dvc.yaml                   # DVC reproducible ML pipeline DAG
-├── GEMINI.md                  # Project rules & engineering conventions
-├── PROJECT_MANIFEST.md        # Compact architectural directory manifest
-├── RECSYS_V2_WORKFLOW_AND_DESIGN.md # Comprehensive v2 architectural design doc
+├── config.py                          # Centralized configuration, constants, and paths
+├── requirements.txt                   # Pinned production dependencies
+├── docker-compose.yml                 # Multi-service stack (api, postgres, redis, qdrant)
+├── dvc.yaml                           # DVC reproducible ML pipeline DAG
+├── dvc.lock                           # DVC state lockfile
+├── GEMINI.md                          # Project rules & engineering conventions
+├── PROJECT_MANIFEST.md                # Compact architectural manifest
+├── RECSYS_V2_WORKFLOW_AND_DESIGN.md   # Master architectural specification
 │
-├── .github/workflows/         # CI/CD & automation workflows
-│   └── retrain.yml            # (Phase 2) Scheduled cron dvc repro retraining workflow
+├── api/                               # FastAPI Serving Application
+│   ├── main.py                        # Production async server (/v2/recommend, /v2/similar, etc.)
+│   ├── schemas.py                     # Pydantic v2 validation models
+│   ├── cache.py                       # Redis asynchronous caching & telemetry
+│   ├── db.py                          # PostgreSQL asynchronous event logger
+│   ├── logging_config.py              # Structured JSON logging & metrics collector
+│   ├── retrain_manager.py             # Subprocess manager for DVC pipeline execution
+│   └── Dockerfile                     # Production container image
 │
-├── pipeline/                  # v2 Background sync & orchestration tasks
-│   └── sync_embeddings.py     # Qdrant collection initialization & vector upsert
+├── pipeline/                          # Orchestration & Vector Sync
+│   └── sync_embeddings.py             # Qdrant collection initialization & upsert
 │
-├── src/                       # Pipeline stage scripts (v1 baseline + v2 ranker)
-│   ├── 01_data_ingestion.py   # Raw data stream ingestion & parent_asin alignment
-│   ├── 02_preprocessing.py    # Imputation, feature engineering & parquet export
-│   ├── 03_sentiment_nlp.py    # VADER / TextBlob & TF-IDF + SVM classifier
-│   ├── 03_b_t5_summarization.py # T5 abstractive review summarizer
-│   ├── 04_apriori_recommender.py # Frequent itemset mining & association rules
-│   ├── 05_content_cf_recommender.py # Content-based & item/user collaborative filtering
-│   ├── 06_mf_ncf_pytorch.py   # PyTorch Matrix Factorization & Neural CF models
-│   ├── 07_semantic_search.py  # e5 dense embedding generation & BM25 indexer
-│   ├── 08_hybrid_engine.py    # v1 hybrid heuristic engine
-│   ├── 09_als_svdpp.py        # Implicit ALS & Surprise SVD++ models
-│   ├── 10_ab_comparison.ipynb # Offline metric evaluation & A/B evaluation suite
-│   └── 11_mlflow_report.ipynb # MLflow metric leaderboard generator
+├── src/                               # ML Pipeline Stages
+│   ├── 01_data_ingestion.py           # Raw data stream extraction (Amazon Reviews 2023)
+│   ├── 02_preprocessing.py            # Imputation, feature engineering & parquet export
+│   ├── 03_sentiment_nlp.py            # VADER / TextBlob & TF-IDF + SVM classifier
+│   ├── 03_b_t5_summarization.py       # T5 abstractive review summarizer
+│   ├── 04_apriori_recommender.py      # Frequent itemset mining & association rules
+│   ├── 05_content_cf_recommender.py   # Content-based & item/user collaborative filtering
+│   ├── 06_mf_ncf_pytorch.py           # PyTorch Matrix Factorization & Neural CF
+│   ├── 07_semantic_search.py          # e5 dense embedding generation & BM25 indexer
+│   ├── 08_hybrid_engine.py            # Baseline hybrid heuristic engine
+│   ├── 09_als_svdpp.py                # Implicit ALS & Surprise SVD++ models
+│   ├── 10_ab_comparison.ipynb         # Offline metric evaluation & A/B comparison suite
+│   ├── 11_mlflow_report.ipynb         # MLflow metric leaderboard generator
+│   ├── 12_ranker_features.py          # Ranker feature extraction & negative sampling
+│   ├── 12_ranker.py                   # LightGBM LambdaMART ranker training
+│   ├── 13_two_tower.py                # PyTorch Two-Tower dual encoder model
+│   └── 14_llm_layer.py                # Gemini 3.5 Flash-Lite explanation & query parsing
 │
-├── api/                       # Serving layer
-│   ├── main.py                # FastAPI endpoints (/recommend, /similar, /health, /admin/retrain)
-│   ├── retrain_manager.py     # (Phase 2) Subprocess manager for DVC pipeline execution
-│   ├── schemas.py             # Pydantic request/response validation schemas
-│   └── test_api.py            # API integration test suite
+├── tests/                             # Automated Test Suites (Pytest)
+│   ├── test_api.py                    # Serving layer integration tests (14 tests)
+│   ├── test_sync_embeddings.py        # Qdrant vector index & ANN tests
+│   ├── test_ranker.py                 # Ranker feature extraction & LightGBM tests
+│   ├── test_two_tower.py              # Two-Tower neural model tests
+│   ├── test_llm_layer.py              # LLM explanation & query parsing tests
+│   ├── test_admin_retrain.py          # Admin retrain authorization & execution tests
+│   └── test_model_artifacts.py        # Model artifact persistence & MLflow verification
 │
-├── tests/                     # Automated test suites
-│   ├── test_sync_embeddings.py # Vector index and invariant unit tests
-│   ├── test_admin_retrain.py  # (Phase 2) Admin retrain trigger and auth tests
-│   └── test_retrain_workflow.py # (Phase 2) Workflow syntax and schedule tests
+├── web/                               # Next.js 14 Production Web Application
+│   ├── app/                           # App Router pages (/ , /product/[id], /search, /admin)
+│   ├── components/                    # UI Components (ProductCard, Navbar, UserSwitcher, etc.)
+│   ├── context/                       # React context (UserContext state management)
+│   ├── lib/                           # Type-safe API client (RecSysAPI) and demo users
+│   └── package.json                   # Web dependencies & Next.js build scripts
 │
-├── data/                      # [Git-ignored] Parquet / CSV datasets
-├── embeddings/                # [Git-ignored] Precomputed .npy embeddings
-├── models/                    # [Git-ignored] Serialized model artifacts (.pth, .pkl, .npz)
-└── mlflow/                    # [Git-ignored] MLflow experiment logs (DS11-v2)
+├── data/                              # [Git-ignored] Clean parquet datasets & ID mappings
+├── embeddings/                        # [Git-ignored] Precomputed e5 .npy embeddings
+├── models/                            # [Git-ignored] Serialized model artifacts (.pkl, .pth, .npz)
+└── mlflow/                            # [Git-ignored] MLflow experiment logs (DS11-v2)
 ```
 
 ---
 
-## 4. Key Invariants & Engineering Principles
+## 4. API Reference (v2 REST Interface)
 
-1. **`item_id == parent_asin`**: All catalog joins, model indices, feature lookups, and API endpoints strictly use `parent_asin` as the primary identifier (`item_id`). Raw `asin` is never used for indexing.
-2. **Deterministic Point IDs**: Qdrant point IDs are deterministically generated via `uuid.uuid5(uuid.NAMESPACE_DNS, item_id)` ensuring idempotent upserts.
-3. **DVC DAG Ownership**: Pipeline execution is owned exclusively by `dvc.yaml`. Retrain triggers run `dvc repro`.
-4. **MLflow Tracking**: All model runs are logged to MLflow experiment `DS11-v2` (`mlflow.set_tracking_uri('mlflow/')`).
+All endpoints are strictly namespaced under `/v2/` with OpenAPI documentation available at `http://127.0.0.1:8000/docs`:
+
+### `POST /v2/recommend`
+Generates personalized rankings or cold-start recommendations.
+```json
+// Request
+{
+  "user_id": "AE3RQLFSVY5DOCCDWJIQRQVCDS4Q",
+  "item_id": null,
+  "top_k": 8,
+  "category_filter": "Video Games",
+  "product_type": null,
+  "sort_by": "ranker"
+}
+
+// Response
+{
+  "user_id": "AE3RQLFSVY5DOCCDWJIQRQVCDS4Q",
+  "item_id": null,
+  "cold_start": false,
+  "source": "personalized_ranker",
+  "model_version": "v2.0",
+  "results": [
+    {
+      "item_id": "B00HM1XPN4",
+      "title": "Redragon S101 Gaming Keyboard, M601 Mouse, RGB Backlit",
+      "score": 0.9421,
+      "source": "personalized_ranker",
+      "category": "Video_Games",
+      "price": 35.99,
+      "average_rating": 4.6,
+      "explanation": "High collaborative match with your previous activity in Video Games.",
+      "feature_signals": {
+        "als_score": 0.882,
+        "content_score": 0.915,
+        "apriori_lift": 1.450,
+        "popularity": 0.960
+      }
+    }
+  ]
+}
+```
+
+### `GET /v2/similar/{item_id}`
+Retrieves nearest neighbors from the Qdrant HNSW vector index alongside the queried product's metadata.
+- **Parameters**: `top_k` (default: 10), `category_filter` (optional), `price_ceiling` (optional).
+
+### `GET /v2/search`
+Executes hybrid semantic vector search (`e5-base-v2`) + lexical keyword matching (`BM25`) with LLM query understanding.
+- **Parameters**: `q` (search query), `top_k`, `category`, `price_max`.
+
+### `POST /v2/events`
+Logs interaction events (`click`, `view`, `purchase`, `rating`, `cart`) into PostgreSQL for model retraining.
+
+### `GET /v2/health` & `GET /metrics`
+- `/v2/health`: Multi-subsystem connection diagnostics (DB, Redis, Vector DB, Ranker).
+- `/metrics`: Structured JSON telemetry containing p50, p95, p99 latencies, cache hit rate, and request volume.
 
 ---
 
-## 5. Quickstart & Reproduction Guide
+## 5. Quickstart & Local Reproduction
 
 ### Prerequisites
 - Python 3.10+
+- Node.js 18+ & npm
 - Docker & Docker Compose
-- (Optional) NVIDIA GPU for deep learning models / e5 embedding generation
 
-### Step 1: Clone & Environment Setup
+### 1. Clone & Set Up Environment
 ```bash
 git clone https://github.com/warutkm/rs.git
 cd rs
 
-# Create virtual environment
+# Python environment
 python -m venv venv
-# On Linux/macOS: source venv/bin/activate
-# On Windows: venv\Scripts\activate
-
-# Install dependencies
+# Windows: venv\Scripts\activate | Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt
+
+# Web dependencies
+cd web && npm install && cd ..
 ```
 
-### Step 2: Launch Supporting Services
-Start Qdrant, Redis, and PostgreSQL containers:
+### 2. Launch Infrastructure Services
 ```bash
-docker-compose up -d qdrant redis postgres
+docker-compose up -d postgres redis qdrant
 ```
-Verify Qdrant is running at `http://localhost:6333` (Web UI at `http://localhost:6333/dashboard`).
 
-### Step 3: Run Data & Embedding Pipeline
-Execute the pipeline stages to ingest raw data, preprocess, and generate embeddings:
+### 3. Run Pipeline Stages & Sync Embeddings
 ```bash
-# Ingest and preprocess data
+# Data preprocessing & feature engineering
 python src/01_data_ingestion.py
 python src/02_preprocessing.py
 
-# Generate text embeddings & item metadata
-python src/07_semantic_search.py --mode local
-```
-*(Or reproduce the full DAG via `dvc repro`)*
-
-### Step 4: Sync Embeddings into Qdrant
-Upsert precomputed embeddings and metadata payload into the Qdrant `products` collection:
-```bash
+# Sync vectors into Qdrant HNSW collection
 python pipeline/sync_embeddings.py --recreate
-```
-This indexes all 44,301 items with Cosine distance and creates payload indexes for `category`, `price`, `item_id`, and `average_rating`.
 
-### Step 5: Run Automated Tests
-```bash
-pytest -v
+# Train LightGBM LambdaMART ranker
+python src/12_ranker_features.py
+python src/12_ranker.py
 ```
 
-### Step 6: Start API Service
+### 4. Execute Automated Test Suite
 ```bash
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+pytest tests/ -v
 ```
-API Documentation: `http://localhost:8000/docs`
+
+### 5. Launch Backend & Frontend
+```bash
+# Terminal 1: FastAPI Backend
+uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2: Next.js Frontend
+cd web
+npm run dev
+```
+Open **[http://localhost:3000](http://localhost:3000)** in your browser.
 
 ---
 
-## 6. Implementation Progress & Roadmap
+## 6. Engineering Invariants & Quality Standards
 
-- [x] **Phase 0: Scaffold & Config** — Scaffolding, `docker-compose.yml`, `config.py`, and project rules.
-- [x] **Phase 1: Ingestion Invariants & Qdrant HNSW Sync** — Validated `item_id = parent_asin`, implemented `pipeline/sync_embeddings.py`, verified ANN search on 44,301 items.
-- [x] **Phase 2: Scheduled Retrain Automation** — GitHub Actions cron retrain DAG & `/admin/retrain` endpoint.
-- [ ] **Phase 3: Model Artifact Refresh** — Regenerate trained ALS, SVD++, MF, NCF, and Apriori artifacts.
-- [ ] **Phase 4: Ranker Feature Store & LightGBM LambdaMART** — Build `data/ranker_train.parquet` and train learned ranker.
-- [ ] **Phase 5: Two-Tower Retrieval Model** — Unified user/item embedding tower (optional stretch).
-- [ ] **Phase 6: LLM Explanation & Query Understanding** — Gemini 3.5 Flash-Lite query rewriting and cached explanations.
-- [ ] **Phase 7: Async FastAPI v2 Platform** — Async endpoints, Redis cache, PostgreSQL event logging, rate limiting.
-- [ ] **Phase 8: Next.js Frontend Application** — Modern interactive UI with user switching, search, and personal rails.
-- [ ] **Phase 9: CI/CD Pipeline** — GitHub Actions lint, test, smoke-retrain, Docker build.
-- [ ] **Phase 10: Observability** — Structured JSON logging & `/metrics` latency and hit-rate monitoring.
-- [ ] **Phase 11: Production Deployment** — Tier 1 public deployment (Render / Qdrant Cloud / Neon / Upstash).
-- [ ] **Phase 12: Offline Evaluation & Leaderboard** — Re-run A/B evaluation suite with Ranker and refresh MLflow report.
+1. **Identifier Invariant**: `item_id == parent_asin` throughout all data frames, feature matrices, Qdrant payloads, PostgreSQL records, and API schemas.
+2. **Deterministic Vector Upsert**: Vector IDs are derived using `uuid.uuid5(uuid.NAMESPACE_DNS, item_id)`.
+3. **Reproducibility**: Pipeline DAG is versioned in `dvc.yaml` and executed via `dvc repro`.
+4. **MLflow Tracking**: All model artifacts log parameters, metrics, and models to MLflow experiment `DS11-v2`.
+5. **Observability**: Zero heavy monitoring containers; real-time telemetry is exposed through the structured `/metrics` endpoint.
+
+---
+
+## 7. License
+Distributed under the MIT License. See `LICENSE` for more information.

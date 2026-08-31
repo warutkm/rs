@@ -15,6 +15,7 @@ Endpoints:
 
 import os
 import sys
+import re
 import time
 import json
 import uuid
@@ -121,23 +122,64 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[WARN] Error loading ID maps: {e}")
 
-    # 3. Load item metadata lookup table from clean parquet
+    # 3. Load item metadata lookup table from clean parquet or merge CSV
     try:
-        if os.path.exists(config.CLEAN_PARQUET_PATH):
-            df = pd.read_parquet(config.CLEAN_PARQUET_PATH)
-            # Group by parent_asin (item_id)
+        parquet_path = config.CLEAN_PARQUET_PATH
+        csv_path = config.MERGE_CSV_PATH
+        df = None
+        if os.path.exists(parquet_path):
+            df = pd.read_parquet(parquet_path)
+        elif os.path.exists(csv_path):
+            df = pd.read_csv(csv_path)
+
+        if df is not None:
+            # Group by parent_asin / item_id and aggregate review statistics
             meta_dict = {}
             for row in df.itertuples():
                 iid = str(getattr(row, "parent_asin", getattr(row, "item_id", "")))
-                if iid and iid not in meta_dict:
+                if not iid:
+                    continue
+                if iid not in meta_dict:
+                    title_raw = getattr(row, "title_meta", getattr(row, "title_rev", iid))
+                    title = str(title_raw).strip() if pd.notna(title_raw) and str(title_raw).strip() else iid
+                    cat_raw = getattr(row, "main_category_meta", getattr(row, "main_category_rev", "General"))
+                    cat = str(cat_raw).strip() if pd.notna(cat_raw) else "General"
+                    price_val = float(getattr(row, "price", 19.99)) if pd.notna(getattr(row, "price", None)) else 19.99
+                    avg_rating = float(getattr(row, "average_rating", 4.0)) if pd.notna(getattr(row, "average_rating", None)) else 4.0
+                    rating_num = int(getattr(row, "rating_number", 10)) if pd.notna(getattr(row, "rating_number", None)) else 10
+
                     meta_dict[iid] = {
                         "item_id": iid,
-                        "title": getattr(row, "title_meta", getattr(row, "title_rev", iid)),
-                        "category": getattr(row, "main_category_meta", getattr(row, "main_category_rev", "Unknown")),
-                        "price": float(getattr(row, "price", 19.99)) if pd.notna(getattr(row, "price", None)) else 19.99,
-                        "average_rating": float(getattr(row, "average_rating", 4.0)) if pd.notna(getattr(row, "average_rating", None)) else 4.0,
-                        "rating_number": int(getattr(row, "rating_number", 10)) if pd.notna(getattr(row, "rating_number", None)) else 10,
+                        "title": title,
+                        "category": cat,
+                        "price": price_val,
+                        "average_rating": avg_rating,
+                        "rating_number": rating_num,
+                        "review_count": 0,
+                        "verified_count": 0,
+                        "helpful_votes": 0.0,
                     }
+
+                m = meta_dict[iid]
+                m["review_count"] += 1
+                if bool(getattr(row, "verified_purchase", False)):
+                    m["verified_count"] += 1
+                h_vote = getattr(row, "helpful_vote", 0)
+                if pd.notna(h_vote):
+                    try:
+                        m["helpful_votes"] += float(h_vote)
+                    except (ValueError, TypeError):
+                        pass
+
+            # Compute satisfaction score for each item:
+            # satisfaction = 0.6 * rating_mean + 0.2 * verified_rate + 0.2 * log1p(helpful_votes)
+            for iid, m in meta_dict.items():
+                v_rate = float(m["verified_count"] / max(1, m["review_count"]))
+                h_log = float(np.log1p(m["helpful_votes"]))
+                r_mean = float(m["average_rating"])
+                m["verified_rate"] = round(v_rate, 4)
+                m["satisfaction_score"] = round(0.6 * r_mean + 0.2 * v_rate + 0.2 * h_log, 4)
+
             state["item_meta"] = meta_dict
 
             # Build popularity lists
@@ -149,12 +191,15 @@ async def lifespan(app: FastAPI):
                 cat_pop = {}
                 for cat, group in df.groupby(cat_col):
                     item_col = "parent_asin" if "parent_asin" in group.columns else "item_id"
-                    cat_pop[cat] = group[item_col].value_counts().index.tolist()[:200]
+                    items_list = group[item_col].value_counts().index.tolist()[:200]
+                    cat_pop[str(cat)] = items_list
+                    cat_pop[str(cat).replace("_", " ").lower().strip()] = items_list
+                    cat_pop[str(cat).lower()] = items_list
                 state["category_popular"] = cat_pop
 
             logger.info(f"[OK] Item metadata indexed for {len(meta_dict):,} items.")
     except Exception as e:
-        logger.warning(f"[WARN] Error loading clean parquet metadata: {e}")
+        logger.warning(f"[WARN] Error loading metadata: {e}")
 
     # 4. Load LightGBM LambdaMART Ranker
     try:
@@ -288,15 +333,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 class TracingAndMetricsMiddleware(BaseHTTPMiddleware):
     """
     Middleware that manages X-Request-ID, calculates latency,
@@ -342,10 +378,37 @@ class TracingAndMetricsMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(TracingAndMetricsMiddleware)
 
+# Add CORSMiddleware on the outside so it handles preflights and adds headers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:8000", "http://127.0.0.1:8000", "*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
+
+def _normalize_category(cat: Optional[str]) -> str:
+    """Normalize category strings by stripping whitespace, underscores, and lowercasing."""
+    if not cat:
+        return ""
+    return re.sub(r"[\s_]+", "", str(cat)).lower()
+
+
+def _matches_category(item_cat: Optional[str], target_cat: Optional[str]) -> bool:
+    """Check if item category matches filter, supporting spaces, underscores, and 'All'."""
+    if not target_cat:
+        return True
+    target_norm = _normalize_category(target_cat)
+    if target_norm in ("", "all", "allcategories", "none"):
+        return True
+    item_norm = _normalize_category(item_cat)
+    return item_norm == target_norm or target_norm in item_norm or item_norm in target_norm
+
 
 def _get_item_metadata(item_id: str) -> Dict[str, Any]:
     """Retrieve indexed item metadata (parent_asin) with safe defaults."""
@@ -359,6 +422,9 @@ def _get_item_metadata(item_id: str) -> Dict[str, Any]:
         "price": 19.99,
         "average_rating": 4.0,
         "rating_number": 1,
+        "verified_rate": 0.9,
+        "helpful_votes": 1.0,
+        "satisfaction_score": 2.8,
     }
 
 
@@ -366,11 +432,13 @@ def _retrieve_candidates(
     user_id: str,
     item_id: Optional[str] = None,
     category_filter: Optional[str] = None,
+    product_type: Optional[str] = None,
     max_candidates: int = 150,
 ) -> tuple[List[str], bool, str]:
     """
     Two-stage candidate retrieval layer.
     Retrieves candidates from ALS, SVD++, MF, NCF, Two-Tower, and Qdrant ANN.
+    Supports normalized category matching and product type keyword filtering.
     Returns: (candidate_item_ids, is_cold_start, primary_source)
     """
     user_map = state.get("user_map", {})
@@ -432,27 +500,65 @@ def _retrieve_candidates(
                 pass
 
     # 3. Top Popularity / Category Fill
-    if len(candidates) < max_candidates:
-        if category_filter and category_filter in state.get("category_popular", {}):
-            pool = state["category_popular"][category_filter]
-        else:
-            pool = state.get("popular_items", [])
+    norm_cat = _normalize_category(category_filter) if category_filter else None
+    if norm_cat and norm_cat not in ("all", "allcategories"):
+        pool = []
+        for cat_k, items_list in state.get("category_popular", {}).items():
+            if _normalize_category(cat_k) == norm_cat:
+                pool = items_list
+                break
+        if not pool:
+            pool = [iid for iid, meta in state.get("item_meta", {}).items() if _matches_category(meta.get("category"), category_filter)]
+    else:
+        pool = state.get("popular_items", [])
 
-        for cand in pool:
+    for cand in pool:
+        if cand not in seen:
+            candidates.append(cand)
+            seen.add(cand)
+            if len(candidates) >= max_candidates:
+                break
+
+    # If still not enough candidates, fill from item_meta
+    if len(candidates) < 20:
+        for cand in state.get("item_meta", {}).keys():
             if cand not in seen:
+                if category_filter and not _matches_category(_get_item_metadata(cand).get("category"), category_filter):
+                    continue
                 candidates.append(cand)
                 seen.add(cand)
                 if len(candidates) >= max_candidates:
                     break
 
     # Apply category filtering if specified
-    if category_filter:
+    if category_filter and not _matches_category("all", category_filter):
         filtered = [
             c for c in candidates
-            if _get_item_metadata(c).get("category", "").lower() == category_filter.lower()
+            if _matches_category(_get_item_metadata(c).get("category"), category_filter)
         ]
-        if len(filtered) >= 10:
+        if filtered:
             candidates = filtered
+
+    # Apply product_type keyword filter if specified
+    if product_type and product_type.strip():
+        pt_clean = product_type.lower().strip()
+        filtered_pt = [
+            c for c in candidates
+            if pt_clean in _get_item_metadata(c).get("title", "").lower()
+            or pt_clean in _get_item_metadata(c).get("category", "").lower()
+        ]
+        # Supplement from full catalog if filtered candidate count is low
+        if len(filtered_pt) < 15:
+            for cand, meta in state.get("item_meta", {}).items():
+                if cand not in seen and (pt_clean in meta.get("title", "").lower() or pt_clean in meta.get("category", "").lower()):
+                    if category_filter and not _matches_category(meta.get("category"), category_filter):
+                        continue
+                    filtered_pt.append(cand)
+                    seen.add(cand)
+                    if len(filtered_pt) >= max_candidates:
+                        break
+        if filtered_pt:
+            candidates = filtered_pt
 
     cold_start = not is_warm_user
     source = "personalized_ranker" if is_warm_user else ("content_cold_start" if item_id else "trending_cold_start")
@@ -553,7 +659,9 @@ async def _background_cache_explanation(
         return
 
     try:
-        exp_obj = await llm_layer.generate_explanation_async(
+        import importlib
+        llm_mod = importlib.import_module("14_llm_layer")
+        inp = llm_mod.FeatureExplanationInput(
             user_id=user_id,
             item_id=item_id,
             title=title,
@@ -562,16 +670,25 @@ async def _background_cache_explanation(
             rating_mean=rating_mean,
             features=features,
         )
+        if hasattr(llm_layer, "explain_async"):
+            exp_obj = await llm_layer.explain_async(inp, use_cache=True)
+        elif hasattr(llm_layer, "explain"):
+            exp_obj = llm_layer.explain(inp, use_cache=True)
+        else:
+            exp_obj = llm_mod.generate_rule_based_explanation(inp)
+
         # Cache explanation object in Redis
+        dumped = exp_obj.model_dump() if hasattr(exp_obj, "model_dump") else exp_obj.dict()
         await set_cached_explanation(
             user_id=user_id,
             item_id=item_id,
-            data=exp_obj.model_dump(),
+            data=dumped,
             model_version=config.MODEL_VERSION,
             ttl=config.EXPLANATION_CACHE_TTL,
         )
     except Exception as e:
         logger.warning(f"[Background Task] Error caching explanation for {item_id}: {e}")
+
 
 
 # =============================================================================
@@ -589,20 +706,22 @@ async def root():
 
 
 # -----------------------------------------------------------------------------
-# POST /v2/recommend & POST /recommend
+# POST /v2/recommend
 # -----------------------------------------------------------------------------
 @app.post("/v2/recommend", response_model=RecommendResponse, tags=["recommend"])
-@app.post("/recommend", response_model=RecommendResponse, tags=["recommend"])
 async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
     """
     Personalized Recommendation Serving Pipeline:
       1. Response cache lookup (Redis).
       2. Candidate generation (ALS, SVD++, MF, NCF, Qdrant ANN, or Popularity fallback).
       3. 10-dimensional feature extraction.
-      4. LightGBM LambdaMART ranker inference.
+      4. Ranking via LightGBM LambdaMART or review-based satisfaction scoring.
       5. LLM explanation retrieval & background asynchronous generation.
     """
-    cache_key = f"rec_resp:{req.user_id}:{req.item_id or 'none'}:{req.top_k}:{req.category_filter or 'all'}"
+    cat_key = req.category_filter or "all"
+    pt_key = req.product_type or "all"
+    sort_key = req.sort_by or "ranker"
+    cache_key = f"rec_resp:{req.user_id}:{req.item_id or 'none'}:{req.top_k}:{cat_key}:{pt_key}:{sort_key}"
     cached_resp = await get_cached_response(cache_key)
     if cached_resp:
         return RecommendResponse(**cached_resp)
@@ -612,6 +731,7 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
         user_id=req.user_id,
         item_id=req.item_id,
         category_filter=req.category_filter,
+        product_type=req.product_type,
         max_candidates=100,
     )
 
@@ -628,17 +748,25 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
     # 2. Ranker Feature Extraction
     features_mat, feature_dicts = _compute_ranker_features(req.user_id, candidates)
 
-    # 3. LightGBM LambdaMART Ranking
-    ranker = state.get("ranker")
-    if ranker is not None:
-        try:
-            scores = ranker.predict(features_mat)
-        except Exception as e:
-            logger.warning(f"Ranker inference failed: {e}; falling back to composite score.")
-            scores = features_mat[:, 0] + features_mat[:, 2] + features_mat[:, 4]
+    # 3. Scoring Strategy: Satisfaction Score or LambdaMART Ranker
+    if req.sort_by == "satisfaction":
+        scores = np.array([
+            _get_item_metadata(iid).get("satisfaction_score", 0.0)
+            for iid in candidates
+        ], dtype=np.float32)
+        source_type = "satisfaction_ranker"
     else:
-        # Fallback composite score
-        scores = features_mat[:, 0] + features_mat[:, 2] + features_mat[:, 4]
+        # LightGBM LambdaMART Ranking
+        ranker = state.get("ranker")
+        if ranker is not None:
+            try:
+                scores = ranker.predict(features_mat)
+            except Exception as e:
+                logger.warning(f"Ranker inference failed: {e}; falling back to composite score.")
+                scores = features_mat[:, 0] + features_mat[:, 2] + features_mat[:, 4]
+        else:
+            # Fallback composite score
+            scores = features_mat[:, 0] + features_mat[:, 2] + features_mat[:, 4]
 
     # Sort descending
     ranked_indices = np.argsort(-scores)[:req.top_k]
@@ -653,8 +781,23 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
         cached_exp = await get_cached_explanation(req.user_id, iid, config.MODEL_VERSION)
         explanation_text = cached_exp.get("explanation") if cached_exp else None
 
-        # If missing, dispatch background LLM explanation generation
+        # If missing from Redis cache, synthesize instant explanation and dispatch background LLM
         if not explanation_text:
+            feats = feature_dicts[idx] if idx < len(feature_dicts) else {}
+            cat = meta.get("category", "General")
+            if req.sort_by == "satisfaction":
+                sat_sc = meta.get("satisfaction_score", score_val)
+                v_rate = meta.get("verified_rate", 0.9)
+                explanation_text = f"Top satisfaction score ({sat_sc:.2f}) with {v_rate*100:.0f}% verified customer reviews."
+            elif feats.get("als_score", 0) > 0.4 or feats.get("ncf_score", 0) > 0.4:
+                explanation_text = f"High collaborative match with your previous activity in {cat}."
+            elif feats.get("apriori_lift", 0) > 1.1:
+                explanation_text = f"Frequently bought together with items in your recent {cat} views."
+            elif feats.get("content_score", 0) > 0.4:
+                explanation_text = f"Matches your preference for {cat} features and specifications."
+            else:
+                explanation_text = f"Top rated and trending across Amazon's {cat} catalog."
+
             background_tasks.add_task(
                 _background_cache_explanation,
                 user_id=req.user_id,
@@ -663,7 +806,7 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
                 category=meta.get("category", "General"),
                 price=meta.get("price", 19.99),
                 rating_mean=meta.get("average_rating", 4.0),
-                features=feature_dicts[idx],
+                features=feature_dicts[idx] if idx < len(feature_dicts) else {},
             )
 
         # Clean feature signals for model attribution
@@ -697,10 +840,9 @@ async def recommend(req: RecommendRequest, background_tasks: BackgroundTasks):
 
 
 # -----------------------------------------------------------------------------
-# GET /v2/similar/{item_id} & GET /similar/{item_id}
+# GET /v2/similar/{item_id}
 # -----------------------------------------------------------------------------
 @app.get("/v2/similar/{item_id}", response_model=SimilarResponse, tags=["similar"])
-@app.get("/similar/{item_id}", response_model=SimilarResponse, tags=["similar"])
 async def similar(
     item_id: str,
     top_k: int = Query(10, ge=1, le=100),
@@ -710,8 +852,20 @@ async def similar(
     """
     Qdrant Approximate Nearest Neighbor (ANN) vector similarity lookup.
     Falls back to product_vecs cosine similarity if Qdrant is unavailable.
+    Includes target_item metadata for instant detail page rendering.
     """
     results: List[RecommendedItem] = []
+    target_meta = _get_item_metadata(item_id)
+    target_item = RecommendedItem(
+        item_id=item_id,
+        title=target_meta.get("title", item_id),
+        score=1.0,
+        source="catalog_metadata",
+        category=target_meta.get("category"),
+        price=target_meta.get("price"),
+        average_rating=target_meta.get("average_rating"),
+        explanation=f"Top product in {target_meta.get('category', 'Amazon Catalog')} with {target_meta.get('rating_number', 10)} customer ratings.",
+    )
 
     # 1. Try Qdrant client
     qdrant_client = state.get("qdrant_client")
@@ -738,7 +892,7 @@ async def similar(
                         average_rating=pt.get("average_rating"),
                     ))
             if results:
-                return SimilarResponse(item_id=item_id, results=results[:top_k])
+                return SimilarResponse(item_id=item_id, target_item=target_item, results=results[:top_k])
         except Exception as e:
             logger.warning(f"Qdrant ANN search error ({e}); using product_vecs fallback.")
 
@@ -764,7 +918,7 @@ async def similar(
                     ))
                     if len(results) == top_k:
                         break
-            return SimilarResponse(item_id=item_id, results=results)
+            return SimilarResponse(item_id=item_id, target_item=target_item, results=results)
 
         raise HTTPException(status_code=404, detail=f"Item ID '{item_id}' not found in vector index.")
 
@@ -784,7 +938,7 @@ async def similar(
         if iid == item_id:
             continue
         meta = _get_item_metadata(iid)
-        if category_filter and meta.get("category", "").lower() != category_filter.lower():
+        if category_filter and not _matches_category(meta.get("category"), category_filter):
             continue
         if price_ceiling is not None and (meta.get("price") or 0.0) > price_ceiling:
             continue
@@ -801,14 +955,13 @@ async def similar(
         if len(results) == top_k:
             break
 
-    return SimilarResponse(item_id=item_id, results=results)
+    return SimilarResponse(item_id=item_id, target_item=target_item, results=results)
 
 
 # -----------------------------------------------------------------------------
-# GET /v2/search & GET /search
+# GET /v2/search
 # -----------------------------------------------------------------------------
 @app.get("/v2/search", response_model=SearchResponse, tags=["search"])
-@app.get("/search", response_model=SearchResponse, tags=["search"])
 async def search(
     q: str = Query(..., min_length=1, description="Free text search query"),
     top_k: int = Query(10, ge=1, le=100),
@@ -908,10 +1061,9 @@ async def search(
 
 
 # -----------------------------------------------------------------------------
-# POST /v2/events & POST /events
+# POST /v2/events
 # -----------------------------------------------------------------------------
 @app.post("/v2/events", response_model=EventResponse, tags=["events"])
-@app.post("/events", response_model=EventResponse, tags=["events"])
 async def create_event(req: EventCreateRequest):
     """
     Log an interaction event (click, view, purchase, rating) into PostgreSQL.
@@ -931,10 +1083,9 @@ async def create_event(req: EventCreateRequest):
 
 
 # -----------------------------------------------------------------------------
-# GET /v2/health & GET /health
+# GET /v2/health
 # -----------------------------------------------------------------------------
 @app.get("/v2/health", response_model=HealthResponse, tags=["health"])
-@app.get("/health", response_model=HealthResponse, tags=["health"])
 async def health():
     """
     Health check covering all subsystem connections.

@@ -35,12 +35,14 @@ class RecommendedItem(BaseModel):
 class RecommendRequest(BaseModel):
     """
     Payload for POST /v2/recommend.
-    Supports user personalization with optional seed item and category filtering.
+    Supports user personalization with optional seed item, category filtering, and product-type ranking.
     """
     user_id: str                  = Field(..., description="User ID — pass any string for cold-start")
     item_id: Optional[str]        = Field(None, description="Optional seed product ID (parent_asin)")
     top_k: int                    = Field(10, ge=1, le=100, description="Number of results to return")
     category_filter: Optional[str]= Field(None, description="Optional category filter (e.g. Video_Games)")
+    product_type: Optional[str]   = Field(None, description="Optional product type / keyword filter (e.g. keyboard, mouse)")
+    sort_by: Optional[str]        = Field("ranker", description="Ranking strategy: 'ranker' (LambdaMART) or 'satisfaction' (review-based satisfaction score)")
 
     model_config = {
         "json_schema_extra": {
@@ -49,6 +51,8 @@ class RecommendRequest(BaseModel):
                 "item_id": "B08N5WRWNW",
                 "top_k": 10,
                 "category_filter": None,
+                "product_type": "keyboard",
+                "sort_by": "satisfaction",
             }
         }
     }
@@ -71,6 +75,7 @@ class RecommendResponse(BaseModel):
 class SimilarResponse(BaseModel):
     """Response returned by GET /v2/similar/{item_id}."""
     item_id: str
+    target_item: Optional[RecommendedItem] = Field(None, description="Queried item's own metadata")
     results: List[RecommendedItem]
 
 

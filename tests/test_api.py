@@ -38,16 +38,15 @@ def client():
 
 
 def test_health_endpoints(client):
-    """Test both GET /v2/health and legacy GET /health."""
-    for path in ("/v2/health", "/health"):
-        r = client.get(path)
-        assert r.status_code == 200
-        data = r.json()
-        assert data["status"] == "ok"
-        assert "model_loaded" in data
-        assert "ranker_loaded" in data
-        assert "version" in data
-        assert data["version"] == "2.0.0"
+    """Test GET /v2/health status."""
+    r = client.get("/v2/health")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["status"] == "ok"
+    assert "model_loaded" in data
+    assert "ranker_loaded" in data
+    assert "version" in data
+    assert data["version"] == "2.0.0"
 
 
 def test_metrics_endpoint(client):
@@ -209,3 +208,47 @@ def test_admin_retrain_auth(client):
     )
     assert r4.status_code == 200
     assert "status" in r4.json()
+
+
+def test_category_filter_normalization(client):
+    """Test category filter with spaces vs underscores (Video Games vs Video_Games)."""
+    r = client.post("/v2/recommend", json={
+        "user_id": "guest_cold_start",
+        "category_filter": "Video Games",
+        "top_k": 5,
+    })
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["results"]) > 0
+    for item in data["results"]:
+        assert "video" in item["category"].lower()
+
+
+def test_product_type_satisfaction_ranking(client):
+    """Test product_type search with review satisfaction ranking strategy."""
+    r = client.post("/v2/recommend", json={
+        "user_id": "guest_cold_start",
+        "product_type": "keyboard",
+        "sort_by": "satisfaction",
+        "top_k": 5,
+    })
+    assert r.status_code == 200
+    data = r.json()
+    assert len(data["results"]) > 0
+    assert data["source"] == "satisfaction_ranker"
+    scores = [it["score"] for it in data["results"]]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_similar_includes_target_item(client):
+    """Test GET /v2/similar/{item_id} returns target_item with metadata."""
+    sample_id = "B07MFMFW34"
+    r = client.get(f"/v2/similar/{sample_id}?top_k=3")
+    assert r.status_code == 200
+    data = r.json()
+    assert "target_item" in data
+    assert data["target_item"] is not None
+    assert data["target_item"]["item_id"] == sample_id
+    assert data["target_item"]["price"] is not None
+    assert data["target_item"]["average_rating"] is not None
+

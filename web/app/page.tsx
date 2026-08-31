@@ -15,17 +15,27 @@ import {
   ShieldCheck,
   UserCheck,
   Compass,
-  ArrowRight
+  ArrowRight,
+  Search,
+  CheckCircle2,
+  Award
 } from 'lucide-react';
 import Link from 'next/link';
 
 const CATEGORIES = [
   'All Categories',
   'Video Games',
-  'Electronics',
-  'Cell Phones & Accessories',
-  'Camera & Photo',
-  'Smart Home',
+  'Software',
+  'Musical Instruments',
+];
+
+const PRESET_PRODUCT_TYPES = [
+  'Keyboard',
+  'Mouse',
+  'Headphones',
+  'Microphone',
+  'Guitar',
+  'Controller',
 ];
 
 export default function HomePage() {
@@ -37,6 +47,12 @@ export default function HomePage() {
   const [trendingRecs, setTrendingRecs] = useState<RecommendResponse | null>(null);
   const [loadingPersonalized, setLoadingPersonalized] = useState(true);
   const [loadingTrending, setLoadingTrending] = useState(true);
+
+  // Product Type Ranking State (New Feature)
+  const [productTypeQuery, setProductTypeQuery] = useState('Keyboard');
+  const [typedInput, setTypedInput] = useState('Keyboard');
+  const [productTypeRecs, setProductTypeRecs] = useState<RecommendResponse | null>(null);
+  const [loadingProductType, setLoadingProductType] = useState(false);
 
   // Fetch recommendations whenever user or category changes
   const fetchRecommendations = async () => {
@@ -72,6 +88,25 @@ export default function HomePage() {
     }
   };
 
+  // Fetch product type ranking by review satisfaction score
+  const fetchProductTypeRanking = async (typeQuery: string) => {
+    if (!typeQuery.trim()) return;
+    setLoadingProductType(true);
+    try {
+      const res = await RecSysAPI.getRecommendations({
+        userId: currentUser.id,
+        topK: 6,
+        productType: typeQuery.trim(),
+        sortBy: 'satisfaction',
+      });
+      setProductTypeRecs(res);
+    } catch (err) {
+      console.error('Failed to load product type ranking:', err);
+    } finally {
+      setLoadingProductType(false);
+    }
+  };
+
   useEffect(() => {
     fetchRecommendations();
   }, [currentUser.id, selectedCategory]);
@@ -79,6 +114,17 @@ export default function HomePage() {
   useEffect(() => {
     fetchTrending();
   }, []);
+
+  useEffect(() => {
+    fetchProductTypeRanking(productTypeQuery);
+  }, [productTypeQuery]);
+
+  const handleProductTypeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typedInput.trim()) {
+      setProductTypeQuery(typedInput.trim());
+    }
+  };
 
   const isColdStart = currentUser.id === 'guest_cold_start';
 
@@ -266,6 +312,92 @@ export default function HomePage() {
         ) : (
           <div className="glass-panel p-8 text-center rounded-xl border border-slate-800">
             <p className="text-slate-400 text-sm">No recommendations returned for this filter criteria.</p>
+          </div>
+        )}
+      </section>
+
+      {/* NEW FEATURE: Ranking by Product Type Section */}
+      <section className="glass-panel p-6 sm:p-8 rounded-2xl border border-indigo-500/30 space-y-6 shadow-xl relative overflow-hidden">
+        <div className="absolute -right-16 -bottom-16 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 text-xs font-semibold border border-indigo-500/20 mb-2">
+              <Award className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Review Satisfaction Scoring Engine (0.6*Rating + 0.2*Verified + 0.2*log(Helpful))</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight">
+              Rank by Product Type
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-400 mt-1">
+              Type any product keyword to retrieve catalog items ordered by customer review satisfaction velocity.
+            </p>
+          </div>
+
+          {/* Product Type Query Input */}
+          <form onSubmit={handleProductTypeSubmit} className="flex items-center gap-2 max-w-md w-full">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={typedInput}
+                onChange={(e) => setTypedInput(e.target.value)}
+                placeholder="Type e.g. keyboard, mouse, headphones, guitar..."
+                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-900/90 text-slate-100 placeholder-slate-500 rounded-lg border border-slate-700 focus:border-indigo-500 focus:outline-none"
+              />
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+            </div>
+            <button
+              type="submit"
+              disabled={loadingProductType}
+              className="px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg transition-colors shrink-0 shadow-md"
+            >
+              {loadingProductType ? 'Ranking...' : 'Rank'}
+            </button>
+          </form>
+        </div>
+
+        {/* Preset Chips */}
+        <div className="flex items-center gap-1.5 flex-wrap text-xs">
+          <span className="text-slate-400 text-[11px] font-medium mr-1">Popular Types:</span>
+          {PRESET_PRODUCT_TYPES.map((pt) => (
+            <button
+              key={pt}
+              onClick={() => {
+                setTypedInput(pt);
+                setProductTypeQuery(pt);
+              }}
+              className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+                productTypeQuery.toLowerCase() === pt.toLowerCase()
+                  ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 shadow-inner'
+                  : 'bg-slate-900/80 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              {pt}
+            </button>
+          ))}
+        </div>
+
+        {/* Product Type Results Grid */}
+        {loadingProductType ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="glass-card rounded-xl p-3 h-64 animate-pulse bg-slate-900/60" />
+            ))}
+          </div>
+        ) : productTypeRecs && productTypeRecs.results.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            {productTypeRecs.results.map((item, idx) => (
+              <ProductCard
+                key={`pt_${item.item_id}_${idx}`}
+                item={item}
+                rank={idx + 1}
+                showScore={true}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="p-6 text-center text-xs text-slate-400 rounded-xl bg-slate-900/40 border border-slate-800">
+            No products found matching type "{productTypeQuery}". Try "keyboard", "headphones", or "software".
           </div>
         )}
       </section>

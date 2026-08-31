@@ -27,6 +27,7 @@ export interface RecommendResponse {
 
 export interface SimilarResponse {
   item_id: string;
+  target_item?: RecommendedItem | null;
   results: RecommendedItem[];
 }
 
@@ -105,8 +106,8 @@ export interface AdminRetrainStatusResponse {
 }
 
 const API_BASE = typeof window !== 'undefined'
-  ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000')
-  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+  ? (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000')
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000');
 
 async function fetchJSON<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -234,6 +235,8 @@ export const RecSysAPI = {
     itemId?: string;
     topK?: number;
     categoryFilter?: string;
+    productType?: string;
+    sortBy?: string;
   }): Promise<RecommendResponse> {
     try {
       return await fetchJSON<RecommendResponse>(`${API_BASE}/v2/recommend`, {
@@ -243,6 +246,8 @@ export const RecSysAPI = {
           item_id: params.itemId || null,
           top_k: params.topK || 12,
           category_filter: params.categoryFilter || null,
+          product_type: params.productType || null,
+          sort_by: params.sortBy || 'ranker',
         }),
       });
     } catch (err) {
