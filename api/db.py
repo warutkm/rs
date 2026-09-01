@@ -45,6 +45,55 @@ CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);
 """
 
 
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+
+
+def _parse_and_clean_dsn(raw_dsn: str) -> tuple[str, Optional[Any]]:
+    """
+    Normalizes PostgreSQL DSN for asyncpg compatibility.
+    Strips query parameters like 'sslmode' that cause asyncpg errors
+    and maps them to the appropriate asyncpg ssl keyword argument.
+    """
+    if raw_dsn.startswith("postgres://"):
+        raw_dsn = "postgresql://" + raw_dsn[len("postgres://") :]
+
+    parsed = urlparse(raw_dsn)
+    qs = parse_qs(parsed.query)
+
+    ssl_setting = None
+    if "sslmode" in qs:
+        sslmode_val = qs.pop("sslmode", [""])[0].lower()
+        if sslmode_val in ("require", "verify-ca", "verify-full"):
+            ssl_setting = "require"
+        elif sslmode_val in ("disable", "allow", "prefer"):
+            ssl_setting = False
+    elif "ssl" in qs:
+        ssl_val = qs.pop("ssl", [""])[0].lower()
+        if ssl_val in ("true", "1", "require"):
+            ssl_setting = "require"
+        elif ssl_val in ("false", "0", "disable"):
+            ssl_setting = False
+
+    # Auto-detect cloud providers that enforce SSL (Neon, Supabase, AWS RDS, Render)
+    if ssl_setting is None and parsed.hostname:
+        host_lower = parsed.hostname.lower()
+        if any(h in host_lower for h in (".neon.tech", ".supabase.co", ".render.com", ".aivencloud.com")):
+            ssl_setting = "require"
+
+    clean_query = urlencode(qs, doseq=True)
+    clean_dsn = urlunparse(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            clean_query,
+            parsed.fragment,
+        )
+    )
+    return clean_dsn, ssl_setting
+
+
 async def init_db_pool() -> bool:
     """
     Initializes asyncpg connection pool and verifies table schemas.
@@ -65,16 +114,21 @@ async def init_db_pool() -> bool:
         )
 
     try:
+        clean_dsn, ssl_param = _parse_and_clean_dsn(dsn)
         logger.info(
-            f"[DB] Connecting to PostgreSQL at {config.POSTGRES_HOST}:{config.POSTGRES_PORT}/{config.POSTGRES_DB} ..."
+            f"[DB] Connecting to PostgreSQL (host={config.POSTGRES_HOST}, ssl={ssl_param}) ..."
         )
-        _pool = await asyncpg.create_pool(
-            dsn=dsn,
-            min_size=1,
-            max_size=10,
-            command_timeout=10,
-            timeout=5,
-        )
+        pool_kwargs = {
+            "dsn": clean_dsn,
+            "min_size": 1,
+            "max_size": 10,
+            "command_timeout": 10,
+            "timeout": 5,
+        }
+        if ssl_param is not None:
+            pool_kwargs["ssl"] = ssl_param
+
+        _pool = await asyncpg.create_pool(**pool_kwargs)
         # Verify schema
         async with _pool.acquire() as conn:
             await conn.execute(CREATE_TABLE_SQL)

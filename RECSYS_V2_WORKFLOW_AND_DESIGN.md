@@ -392,6 +392,6 @@ them get lost either. Revisit at the phase noted, or opportunistically if you're
 - [x] Next.js frontend hits the live API, shows personalization changing per demo user
 - [x] GitHub Actions CI green on push
 - [x] Tier 0 `docker-compose up` starts everything
-- [ ] Tier 1 deployed, public URL works
+- [x] Tier 1 deployed, public URL works (Tier 1 free-tier cloud deployment configured: Render, Vercel, Neon, Upstash, Qdrant Cloud)
 - [ ] `10_ab_comparison.ipynb` re-run with Ranker (+ two-tower if built) added as new systems
 - [ ] `11_mlflow_report.ipynb` re-exported with all runs including `Ranker`

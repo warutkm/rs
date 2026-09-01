@@ -78,7 +78,13 @@ async def init_redis_pool() -> bool:
             )
         # Test connection
         await _redis_client.ping()
-        logger.info(f"[Cache] Connected to Redis at {config.REDIS_HOST}:{config.REDIS_PORT}.")
+        if url:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(url)
+            logger.info(f"[Cache] Connected to remote Redis at {parsed.hostname}:{parsed.port or 6379} (scheme={parsed.scheme}).")
+        else:
+            logger.info(f"[Cache] Connected to Redis at {config.REDIS_HOST}:{config.REDIS_PORT}.")
         return True
     except Exception as e:
         logger.warning(f"[Cache] Redis unavailable ({e}); running with in-memory cache fallback.")

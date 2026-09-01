@@ -1,0 +1,38 @@
+# =============================================================================
+# Render Blueprint Specification — Amazon RecSys v2 Backend
+# =============================================================================
+# Free-Tier Cloud Deployment Configuration for Render Web Service (FastAPI)
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: amazon-recsys-api
+    runtime: docker
+    dockerfilePath: api/Dockerfile
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /v2/health
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PORT
+        value: "8000"
+      - key: LLM_MODEL
+        value: "gemini-3.5-flash-lite"
+      - key: MODEL_VERSION
+        value: "v2.0"
+      - key: EXPLANATION_CACHE_TTL
+        value: "86400"
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard: Neon Postgres DSN (e.g. postgresql://user:pass@ep-xyz.region.aws.neon.tech/neondb?sslmode=require)
+      - key: REDIS_URL
+        sync: false # Set in Render Dashboard: Upstash Redis URL (e.g. rediss://default:pass@xyz.upstash.io:6379)
+      - key: QDRANT_URL
+        sync: false # Set in Render Dashboard: Qdrant Cloud Endpoint (e.g. https://xyz.us-east4-0.gcp.cloud.qdrant.io:6333)
+      - key: QDRANT_API_KEY
+        sync: false # Set in Render Dashboard: Qdrant Cloud API Key
+      - key: GEMINI_API_KEY
+        sync: false # Set in Render Dashboard: Google Gemini API Key
+      - key: ADMIN_API_KEY
+        generateValue: true

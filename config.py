@@ -150,7 +150,7 @@ POSTGRES_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 POSTGRES_DB = os.getenv("POSTGRES_DB", "recsys")
 POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
-POSTGRES_URL = os.getenv("DATABASE_URL", None)
+POSTGRES_URL = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL", None)
 
 PIPELINE_DIR = os.path.join(BASE_DIR, "pipeline")
 

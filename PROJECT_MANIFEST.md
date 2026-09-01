@@ -11,10 +11,21 @@ amazon_project/
 ├── requirements.txt                   # Pinned project dependencies
 ├── pyproject.toml                     # Black formatting, pytest, and tool configuration
 ├── .flake8                            # Flake8 style & exclusion rules
+├── .env.example                       # Unified environment variable template
+├── .env.tier0.example                 # Tier 0 local Docker Compose environment template
+├── .env.tier1.example                 # Tier 1 free-tier cloud deployment environment template
 ├── docker-compose.yml                 # Local multi-service Tier 0 stack (api, web, postgres, redis, qdrant)
+├── render.yaml                        # (Phase 11) Render Blueprint specification for FastAPI web service
+├── vercel.json                        # (Phase 11) Vercel configuration for Next.js 14 frontend
 ├── .dockerignore                      # Build ignore for root Docker context
 ├── dvc.yaml                           # DVC pipeline DAG definition
 ├── dvc.lock                           # DVC lockfile
+│
+├── docs/                              # Deployment & operational runbooks
+│   └── DEPLOYMENT_TIER1.md            # (Phase 11) Tier 1 Free Cloud Deployment runbook & guide
+│
+├── scripts/                           # Operational and pre-flight tools
+│   └── verify_tier1_connectivity.py   # (Phase 11) Pre-flight cloud connectivity & latency test tool
 │
 ├── src/                               # Model & data pipeline stages (v1 baseline + v2 extensions)
 │   ├── 01_data_ingestion.py           # Ingestion & raw data extraction (Amazon Reviews 2023)
@@ -35,10 +46,10 @@ amazon_project/
 │   └── 14_llm_layer.py                # (Phase 6) Gemini 3.5 Flash-Lite LLM explanations & query rewriting
 │
 ├── api/                               # FastAPI serving application
-│   ├── Dockerfile                     # Container definition for API
+│   ├── Dockerfile                     # Container definition for API (dynamic $PORT support)
 │   ├── main.py                        # (Phase 7) Async FastAPI endpoints (/v2/recommend, /v2/similar, /v2/search, /v2/events, /v2/health, /metrics)
-│   ├── db.py                          # (Phase 7) Async PostgreSQL client & event logging
-│   ├── cache.py                       # (Phase 7) Async Redis explanation & response cache
+│   ├── db.py                          # (Phase 7/11) Async PostgreSQL client & Neon SSL connection pool
+│   ├── cache.py                       # (Phase 7/11) Async Redis explanation & Upstash response cache
 │   ├── logging_config.py              # (Phase 7/10) Structured JSON logging & in-app /metrics percentiles
 │   ├── retrain_manager.py             # (Phase 2) Subprocess manager for DVC pipeline execution
 │   └── schemas.py                     # (Phase 7) Pydantic v2 request/response schemas
@@ -56,15 +67,18 @@ amazon_project/
 │   ├── test_two_tower.py              # (Phase 5) Two-Tower contrastive model & retrieval tests
 │   ├── test_llm_layer.py              # (Phase 6) LLM explanation generation & query rewriting tests
 │   ├── test_ci_workflow.py            # (Phase 9) GitHub Actions CI & scheduled retrain workflow tests
-│   └── test_observability.py          # (Phase 10) Structured JSON telemetry & Docker healthcheck tests
+│   ├── test_observability.py          # (Phase 10) Structured JSON telemetry & Docker healthcheck tests
+│   └── test_tier1_deployment.py       # (Phase 11) Tier 1 cloud manifests, env templates & connectivity tests
 │
 ├── .github/workflows/                 # CI/CD & automation workflows
 │   ├── ci.yml                         # (Phase 9) Full CI pipeline (lint, test, smoke-retrain, build, deploy-on-tag)
 │   ├── scheduled_retrain.yml          # (Phase 9) Cron & dispatch scheduled dvc repro pipeline
 │   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
 │
-├── web/                               # (Phase 8/10) Next.js 14 frontend application
+├── web/                               # (Phase 8/10/11) Next.js 14 frontend application
 │   ├── Dockerfile                     # Multi-stage production container for Next.js 14 runner
+│   ├── vercel.json                    # (Phase 11) Subdirectory-scoped Vercel configuration
+│   ├── .env.example                   # (Phase 11) Next.js environment configuration template
 │   ├── .dockerignore                  # Docker build exclusions for web
 │   ├── app/                           # App Router pages & routes
 │   │   ├── page.tsx                   # Home: Personalized & trending recommendation rails
@@ -100,4 +114,5 @@ amazon_project/
 - `item_id` = `parent_asin` across all tables, models, indices, and APIs.
 - Pipeline DAG is orchestrated by `dvc.yaml` (`dvc repro`).
 - Local multi-service infrastructure (API, PostgreSQL, Redis, Qdrant) managed via root `docker-compose.yml`.
+- Tier 1 free-tier cloud deployment configured via `render.yaml` (Render API), `vercel.json` (Vercel Web), Neon PostgreSQL, Upstash Redis, and Qdrant Cloud.
 - Observability via structured JSON logging and API-level `/metrics` endpoint.

@@ -38,5 +38,5 @@ RUN mkdir -p logs outputs
 # Expose the service port
 EXPOSE 8000
 
-# Run uvicorn — main.py is in /app/api/
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run uvicorn — main.py is in /app/api/, supports dynamic $PORT for cloud deployment
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
