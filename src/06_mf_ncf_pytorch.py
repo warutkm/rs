@@ -405,8 +405,9 @@ def main():
             "ndcg@10": float(ncf_ndcg)
         }
         plot_umap_and_metrics(mf_model, ncf_model, metrics)
-        # FIX: log the UMAP plot to MLflow — was missing before
-        mlflow.log_artifact("outputs/phase6_umap_metrics.png")
+        umap_plot_path = "outputs/phase6_umap_metrics.png"
+        if os.path.exists(umap_plot_path):
+            mlflow.log_artifact(umap_plot_path)
 
     # ================= SAVE METRICS JSON =================
     print("\nSaving metrics...")

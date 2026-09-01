@@ -29,6 +29,8 @@ import pandas as pd
 from pathlib import Path
 from tqdm import tqdm
 
+import torch
+
 warnings.filterwarnings("ignore")
 
 # ═══════════════════════════════════════════════════════════════
@@ -59,10 +61,11 @@ print(f"[ENV] Running in '{ENV}' mode  (§1.6)")
 DATA_PATH  = Path("data/clean_merge_df.parquet")
 EMBED_DIR  = Path("embeddings")
 MODEL_NAME = "intfloat/e5-base-v2"
-USE_FP16   = True
+DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
+USE_FP16   = torch.cuda.is_available()
 
 # §1.6 batch sizes
-BATCH_SIZE = 64 if ENV == "colab" else 8   # Colab ~20 min | Local ~3-4 hrs
+BATCH_SIZE = 64 if (ENV == "colab" or torch.cuda.is_available()) else 32
 
 # Retrieval
 HYBRID_EMB_W    = 0.55
@@ -123,9 +126,9 @@ def load_data() -> pd.DataFrame:
 # ═══════════════════════════════════════════════════════════════
 def load_model():
     from sentence_transformers import SentenceTransformer
-    print(f"[MODEL] {MODEL_NAME}  fp16={USE_FP16}  batch={BATCH_SIZE}")
-    m = SentenceTransformer(MODEL_NAME)
-    if USE_FP16:
+    print(f"[MODEL] {MODEL_NAME}  device={DEVICE}  fp16={USE_FP16}  batch={BATCH_SIZE}")
+    m = SentenceTransformer(MODEL_NAME, device=DEVICE)
+    if USE_FP16 and DEVICE == "cuda":
         m = m.half()
     return m
 
@@ -135,7 +138,7 @@ def load_model():
 def batch_encode(model, texts: list, desc: str) -> np.ndarray:
     chunks = []
     for i in tqdm(range(0, len(texts), BATCH_SIZE), desc=desc, unit="batch"):
-        emb = model.encode(texts[i : i + BATCH_SIZE], normalize_embeddings=True)
+        emb = model.encode(texts[i : i + BATCH_SIZE], normalize_embeddings=True, show_progress_bar=False)
         chunks.append(emb.astype(np.float32))
     return np.vstack(chunks)
 
