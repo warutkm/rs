@@ -336,6 +336,10 @@ def search_similar_items(
     return results
 
 
+# Alias for backward compatibility
+query_similar_items = search_similar_items
+
+
 def verify_sync(
     client: Optional[QdrantClient] = None,
     collection_name: str = QDRANT_COLLECTION_NAME,

@@ -913,9 +913,9 @@ async def similar(
     qdrant_client = state.get("qdrant_client")
     if qdrant_client is not None:
         try:
-            from pipeline.sync_embeddings import query_similar_items
+            from pipeline.sync_embeddings import search_similar_items
 
-            ann_points = query_similar_items(
+            ann_points = search_similar_items(
                 client=qdrant_client,
                 item_id=item_id,
                 top_k=top_k,
