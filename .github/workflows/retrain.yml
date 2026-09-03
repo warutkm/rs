@@ -46,6 +46,14 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Cache & Restore Precomputed Embeddings
+        uses: actions/cache@v4
+        with:
+          path: embeddings/
+          key: embeddings-v2-${{ hashFiles('src/07_semantic_search.py') }}
+          restore-keys: |
+            embeddings-v2-
+
       - name: Execute DVC Pipeline (dvc repro)
         env:
           MLFLOW_TRACKING_URI: "file:./mlflow"

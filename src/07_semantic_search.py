@@ -187,6 +187,28 @@ def encode_reviews(model, df: pd.DataFrame) -> np.ndarray:
         print(f"[7.2] Cache hit — loading {out}")
         return np.load(out)
 
+    # In CPU environment (e.g. CI / local without GPU), sample at most 2 top helpful
+    # reviews per item to avoid 10-14 hour CPU bottleneck on 140k rows.
+    if not torch.cuda.is_available() and len(df) > 10000:
+        print("[7.2] CPU environment detected — sampling top reviews per item to prevent CPU bottleneck...")
+        sort_col = "helpful_vote" if "helpful_vote" in df.columns else None
+        if sort_col:
+            sampled_idx = df.sort_values(sort_col, ascending=False).groupby("item_id").head(2).index
+        else:
+            sampled_idx = df.groupby("item_id").head(2).index
+
+        texts_to_encode = df.loc[sampled_idx, "full_review_text"].fillna("").tolist()
+        print(f"[7.2] Encoding {len(texts_to_encode):,} sampled reviews on CPU (batch={BATCH_SIZE}) …")
+        sampled_embeds = batch_encode(model, texts_to_encode, "Sampled Reviews")
+
+        dim = sampled_embeds.shape[1]
+        embeds = np.zeros((len(df), dim), dtype=np.float32)
+        pos = df.index.get_indexer(sampled_idx)
+        embeds[pos] = sampled_embeds
+        np.save(out, embeds)
+        print(f"       Saved {out}  shape={embeds.shape}")
+        return embeds
+
     print(f"[7.2] Encoding {len(df):,} reviews  batch={BATCH_SIZE} …")
     embeds = batch_encode(model, df["full_review_text"].fillna("").tolist(), "Reviews")
     np.save(out, embeds)
