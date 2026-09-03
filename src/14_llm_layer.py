@@ -958,6 +958,10 @@ class LLMLayer:
             logger.warning(f"Async LLM query rewriting failed ({e}). Falling back to heuristic parser.")
             return parse_query_rule_based(raw_query)
 
+    # Aliases for query parsing
+    parse_query_async = rewrite_query_async
+    parse_query = rewrite_query
+
 
 # =====================================================================
 # 6. MAIN EXECUTION DEMO / VALIDATION
