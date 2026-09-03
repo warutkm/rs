@@ -48,11 +48,28 @@ jobs:
 
       - name: Cache & Restore Precomputed Embeddings
         uses: actions/cache@v4
+        id: cache-embeddings
         with:
           path: embeddings/
           key: embeddings-v2-${{ hashFiles('src/07_semantic_search.py') }}
           restore-keys: |
             embeddings-v2-
+
+      - name: Download Precomputed Embeddings (if not in cache)
+        if: steps.cache-embeddings.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Cache miss — checking for precomputed embeddings from GitHub Release..."
+          gh release download v2-embeddings --pattern "embeddings.zip" --dir . --clobber || true
+          if [ -f "embeddings.zip" ]; then
+            echo "Extracting embeddings.zip..."
+            unzip -q -o embeddings.zip
+            rm -f embeddings.zip
+            echo "Embeddings extracted successfully."
+          else
+            echo "No release archive found — will proceed with pipeline execution."
+          fi
 
       - name: Execute DVC Pipeline (dvc repro)
         env:
