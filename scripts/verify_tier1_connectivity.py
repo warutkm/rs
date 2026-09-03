@@ -115,7 +115,9 @@ async def check_postgres(dsn: Optional[str] = None) -> Dict[str, Any]:
             "status": "FAIL",
             "latency_ms": round(elapsed_ms, 2),
             "message": f"Connection failed: {str(exc)}",
-            "remediation": "Verify DATABASE_URL in .env, check Neon project active state, and ensure ?sslmode=require is set.",
+            "remediation": (
+                "Verify DATABASE_URL in .env, check Neon project active state, and ensure ?sslmode=require is set."
+            ),
         }
 
 
@@ -256,7 +258,10 @@ def check_qdrant(
                 "host": host_display,
                 "status": "PASS",
                 "latency_ms": round(elapsed_ms, 2),
-                "message": f"Cluster healthy. Collection '{collection_name}' active with {points_count:,} indexed vector points.",
+                "message": (
+                    f"Cluster healthy. Collection '{collection_name}' active with {points_count:,} "
+                    f"indexed vector points."
+                ),
             }
         elif has_collection:
             return {
@@ -264,7 +269,10 @@ def check_qdrant(
                 "host": host_display,
                 "status": "WARN",
                 "latency_ms": round(elapsed_ms, 2),
-                "message": f"Collection '{collection_name}' exists but contains 0 points. Run 'python pipeline/sync_embeddings.py' to populate.",
+                "message": (
+                    f"Collection '{collection_name}' exists but contains 0 points. "
+                    f"Run 'python pipeline/sync_embeddings.py' to populate."
+                ),
             }
         else:
             return {
@@ -272,7 +280,10 @@ def check_qdrant(
                 "host": host_display,
                 "status": "WARN",
                 "latency_ms": round(elapsed_ms, 2),
-                "message": f"Cluster connected, but collection '{collection_name}' not found. Run 'python pipeline/sync_embeddings.py'.",
+                "message": (
+                    f"Cluster connected, but collection '{collection_name}' not found. "
+                    f"Run 'python pipeline/sync_embeddings.py'."
+                ),
             }
     except Exception as exc:
         elapsed_ms = (time.perf_counter() - start_t) * 1000.0
@@ -282,7 +293,9 @@ def check_qdrant(
             "status": "FAIL",
             "latency_ms": round(elapsed_ms, 2),
             "message": f"Connection failed: {str(exc)}",
-            "remediation": "Verify QDRANT_URL and QDRANT_API_KEY. On Qdrant Cloud, check if the cluster suspended from 7-day inactivity.",
+            "remediation": (
+                "Verify QDRANT_URL and QDRANT_API_KEY. On Qdrant Cloud, check if cluster suspended " "from inactivity."
+            ),
         }
 
 
@@ -309,7 +322,10 @@ def check_llm(
     try:
         import importlib
 
-        llm_mod = importlib.import_module("src.14_llm_layer") if "src.14_llm_layer" in sys.modules or os.path.exists(os.path.join(BASE_DIR, "src", "14_llm_layer.py")) else importlib.import_module("14_llm_layer")
+        if "src.14_llm_layer" in sys.modules or os.path.exists(os.path.join(BASE_DIR, "src", "14_llm_layer.py")):
+            llm_mod = importlib.import_module("src.14_llm_layer")
+        else:
+            llm_mod = importlib.import_module("14_llm_layer")
         layer = llm_mod.LLMLayer(api_key=target_key, model_name=target_model)
         rewrite_res = layer.rewrite_query("wireless noise cancelling headphones under 50 dollars")
         elapsed_ms = (time.perf_counter() - start_t) * 1000.0
@@ -367,7 +383,10 @@ async def check_api_endpoint(base_url: str) -> Dict[str, Any]:
                 "host": health_url,
                 "status": "PASS",
                 "latency_ms": round(elapsed_ms, 2),
-                "message": f"Service healthy (version={data.get('version')}, ranker={data.get('ranker_loaded')}, items={data.get('n_items')}).",
+                "message": (
+                    f"Service healthy (version={data.get('version')}, "
+                    f"ranker={data.get('ranker_loaded')}, items={data.get('n_items')})."
+                ),
             }
         else:
             return {
@@ -439,7 +458,8 @@ async def main_async(args: argparse.Namespace) -> int:
             print(f"      {YELLOW}Advice:  {r['remediation']}{RESET}")
         print()
 
-    print(f"{BOLD}Summary:{RESET} {len(results)} services checked. Status: {'ALL GREEN' if not has_failure else 'ACTION REQUIRED'}\n")
+    status_msg = "ALL GREEN" if not has_failure else "ACTION REQUIRED"
+    print(f"{BOLD}Summary:{RESET} {len(results)} services checked. Status: {status_msg}\n")
     return 1 if has_failure else 0
 
 
@@ -452,7 +472,12 @@ def main():
     parser.add_argument("--redis", action="store_true", help="Check Redis / Upstash cache")
     parser.add_argument("--qdrant", action="store_true", help="Check Qdrant Cloud vector database")
     parser.add_argument("--llm", action="store_true", help="Check Google Gemini API")
-    parser.add_argument("--api-url", type=str, default=None, help="Check live FastAPI deployment URL (e.g. https://amazon-recsys-api.onrender.com)")
+    parser.add_argument(
+        "--api-url",
+        type=str,
+        default=None,
+        help="Check live FastAPI deployment URL (e.g. https://amazon-recsys-api.onrender.com)",
+    )
     parser.add_argument("--db-url", type=str, default=None, help="Override DATABASE_URL")
     parser.add_argument("--redis-url", type=str, default=None, help="Override REDIS_URL")
     parser.add_argument("--qdrant-url", type=str, default=None, help="Override QDRANT_URL")

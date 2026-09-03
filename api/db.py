@@ -115,9 +115,7 @@ async def init_db_pool() -> bool:
 
     try:
         clean_dsn, ssl_param = _parse_and_clean_dsn(dsn)
-        logger.info(
-            f"[DB] Connecting to PostgreSQL (host={config.POSTGRES_HOST}, ssl={ssl_param}) ..."
-        )
+        logger.info(f"[DB] Connecting to PostgreSQL (host={config.POSTGRES_HOST}, ssl={ssl_param}) ...")
         pool_kwargs = {
             "dsn": clean_dsn,
             "min_size": 1,

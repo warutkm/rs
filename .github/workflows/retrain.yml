@@ -52,6 +52,7 @@ jobs:
           MLFLOW_EXPERIMENT: "DS11-v2"
           ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
         run: |
+          set -o pipefail
           mkdir -p logs
           if [ "${{ inputs.force }}" = "true" ]; then
             python -m dvc repro --force 2>&1 | tee logs/dvc_repro.log

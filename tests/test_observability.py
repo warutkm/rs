@@ -26,8 +26,8 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 from api.main import app
-from api.logging_config import JSONFormatter, MetricsCollector, metrics_collector
-from api.cache import record_hit, record_miss, reset_cache_stats, get_cache_stats
+from api.logging_config import JSONFormatter, MetricsCollector
+from api.cache import record_hit, record_miss, reset_cache_stats
 
 
 @pytest.fixture(scope="module")

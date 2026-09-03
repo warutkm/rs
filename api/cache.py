@@ -82,7 +82,10 @@ async def init_redis_pool() -> bool:
             from urllib.parse import urlparse
 
             parsed = urlparse(url)
-            logger.info(f"[Cache] Connected to remote Redis at {parsed.hostname}:{parsed.port or 6379} (scheme={parsed.scheme}).")
+            logger.info(
+                f"[Cache] Connected to remote Redis at {parsed.hostname}:{parsed.port or 6379} "
+                f"(scheme={parsed.scheme})."
+            )
         else:
             logger.info(f"[Cache] Connected to Redis at {config.REDIS_HOST}:{config.REDIS_PORT}.")
         return True

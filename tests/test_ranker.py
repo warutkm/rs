@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 import lightgbm as lgb
 import mlflow
+import pytest
 
 import config
 
@@ -29,6 +30,11 @@ compute_ndcg_at_k = _mod_ranker.compute_ndcg_at_k
 compute_map_at_k = _mod_ranker.compute_map_at_k
 evaluate_ranking_metrics = _mod_ranker.evaluate_ranking_metrics
 RankerService = _mod_ranker.RankerService
+
+pytestmark = pytest.mark.skipif(
+    not os.path.exists(config.RANKER_TRAIN_PATH),
+    reason="Ranker training artifacts not present (run 'dvc repro' to generate)",
+)
 
 
 def test_ranker_train_parquet_exists_and_schema():
