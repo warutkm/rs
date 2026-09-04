@@ -120,6 +120,8 @@ jobs:
               'models/apriori_recommender.pkl',
               'models/mf_model.pth',
               'models/ncf_model.pth',
+              'models/svm_model.pkl',
+              'models/svm_vectorizer.pkl',
               'embeddings/meta_embeds.npy',
               'embeddings/product_vecs.npz'
           ]

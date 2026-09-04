@@ -16,6 +16,15 @@ stages:
     outs:
       - data/clean_merge_df.parquet
 
+  sentiment:
+    cmd: python src/03_sentiment_nlp.py
+    deps:
+      - data/clean_merge_df.parquet
+      - src/03_sentiment_nlp.py
+    outs:
+      - models/svm_model.pkl
+      - models/svm_vectorizer.pkl
+
   summarize:
     cmd: python src/03_b_t5_summarization.py
     deps:

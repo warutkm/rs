@@ -161,8 +161,10 @@ def main():
     #     experiment: DS11  |  run_name: SVM
     # =============================================================================
     os.environ["MLFLOW_ALLOW_FILE_STORE"] = "true"
-    mlflow.set_tracking_uri("mlflow/")
-    mlflow.set_experiment("DS11-v2")
+    tracking_uri = os.environ.get("MLFLOW_TRACKING_URI", "mlflow/")
+    experiment_name = os.environ.get("MLFLOW_EXPERIMENT", "DS11-v2")
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment(experiment_name)
 
     with mlflow.start_run(run_name="SVM"):
         mlflow.log_param("max_features",  15_000)
