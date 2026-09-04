@@ -22,6 +22,8 @@ jobs:
     name: DVC Retrain & Validate
     runs-on: ubuntu-latest
     timeout-minutes: 120
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository
@@ -50,7 +52,9 @@ jobs:
         uses: actions/cache@v4
         id: cache-embeddings
         with:
-          path: embeddings/
+          path: |
+            embeddings/
+            embeddings_cache/
           key: embeddings-v2-${{ hashFiles('src/07_semantic_search.py') }}
           restore-keys: |
             embeddings-v2-
@@ -60,16 +64,33 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Cache miss — checking for precomputed embeddings from GitHub Release..."
-          gh release download v2-embeddings --pattern "embeddings.zip" --dir . --clobber || true
-          if [ -f "embeddings.zip" ]; then
-            echo "Extracting embeddings.zip..."
-            unzip -q -o embeddings.zip
-            rm -f embeddings.zip
-            echo "Embeddings extracted successfully."
+          echo "Cache miss — checking for precomputed embeddings from GitHub Release (tag: v2-embeddings)..."
+          mkdir -p embeddings_cache
+          gh release download v2-embeddings --pattern "*embed*.zip" --dir . --clobber || {
+            echo "::warning::gh release download failed. Listing available releases:"
+            gh release list || true
+          }
+          ZIP_FILE=$(ls *embed*.zip 2>/dev/null | head -n 1 || true)
+          if [ -n "$ZIP_FILE" ] && [ -f "$ZIP_FILE" ]; then
+            echo "Extracting $ZIP_FILE..."
+            unzip -q -o "$ZIP_FILE" -d .
+            # Mirror all files into embeddings_cache/ so DVC stage wipe does not delete them
+            cp -r embeddings/* embeddings_cache/ 2>/dev/null || true
+            echo "Embeddings extracted and mirrored to embeddings_cache/:"
+            ls -lh embeddings_cache/
+            rm -f "$ZIP_FILE"
           else
-            echo "No release archive found — will proceed with pipeline execution."
+            echo "No embeddings archive found after download step."
           fi
+
+      - name: Mirror Embeddings Cache (Protection against DVC stage wipe)
+        run: |
+          mkdir -p embeddings_cache
+          if [ -d "embeddings" ]; then
+            cp -rn embeddings/* embeddings_cache/ 2>/dev/null || true
+          fi
+          echo "Embeddings cache status:"
+          ls -lh embeddings_cache/ || true
 
       - name: Execute DVC Pipeline (dvc repro)
         env:
