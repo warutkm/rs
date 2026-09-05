@@ -435,14 +435,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"[WARN] LLMLayer: {e}")
 
-    # 9. Load SentenceTransformer Embedder
-    try:
-        from sentence_transformers import SentenceTransformer
-
-        state["embedder"] = SentenceTransformer("intfloat/e5-base-v2")
-        logger.info("[OK] SentenceTransformer (e5-base-v2) loaded.")
-    except Exception as e:
-        logger.warning(f"[WARN] SentenceTransformer: {e}")
+    # 9. Register Embedder (lazy-loaded on demand to maintain <150MB RSS on Render 512MB Free Tier)
+    state["embedder"] = None
+    logger.info("[OK] Embedder registered for lazy-loading (low memory footprint).")
 
     state["model_loaded"] = bool(state["item_meta"] or state["ranker_loaded"] or state["product_vecs"])
     logger.info("=== Service Startup Complete ===")
@@ -526,9 +521,18 @@ app.add_middleware(
 )
 
 
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
+def _get_embedder():
+    """Lazy-load SentenceTransformer on first query to prevent container OOM on 512MB RAM hosts."""
+    if state.get("embedder") is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            state["embedder"] = SentenceTransformer("intfloat/e5-base-v2")
+            logger.info("[OK] Lazy-loaded SentenceTransformer (e5-base-v2).")
+        except Exception as e:
+            logger.warning(f"[WARN] Lazy SentenceTransformer load failed: {e}")
+            return None
+    return state.get("embedder")
 
 
 def _normalize_category(cat: Optional[str]) -> str:
@@ -1162,7 +1166,7 @@ async def search(
         return (arr - lo) / (hi - lo + 1e-9)
 
     # 2. Semantic Embedding Scores
-    embedder = state.get("embedder")
+    embedder = _get_embedder()
     if embedder is not None:
         q_emb = embedder.encode([rewritten_query], normalize_embeddings=True)[0].astype(np.float32)
         emb_norm = _minmax((mat @ q_emb).astype(np.float64))

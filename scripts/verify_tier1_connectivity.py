@@ -331,12 +331,16 @@ def check_llm(
         elapsed_ms = (time.perf_counter() - start_t) * 1000.0
 
         if rewrite_res and getattr(rewrite_res, "rewritten_query", None):
+            msg = (
+                f"Prompt & query rewrite operational: '{rewrite_res.rewritten_query}' "
+                f"(source={rewrite_res.source})."
+            )
             return {
                 "service": "Gemini LLM Layer",
                 "host": f"Google AI API ({target_model})",
                 "status": "PASS",
                 "latency_ms": round(elapsed_ms, 2),
-                "message": f"Prompt & query rewrite operational: '{rewrite_res.rewritten_query}' (source={rewrite_res.source}).",
+                "message": msg,
             }
         else:
             return {
