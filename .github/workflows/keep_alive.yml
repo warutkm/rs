@@ -1,0 +1,23 @@
+name: Render Keep-Alive Heartbeat
+
+on:
+  schedule:
+    # Ping every 10 minutes to reset Render's 15-minute idle sleep timer
+    - cron: "*/10 * * * *"
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  heartbeat:
+    name: Ping Render Backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping FastAPI Health Endpoint
+        run: |
+          echo "Sending heartbeat to Render..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "https://amazon-recsys-api.onrender.com/v2/health")
+          echo "Render HTTP Status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
+            echo "Render service is awake and healthy!"
+          else
+            echo "Service may be waking up (Status: $HTTP_STATUS)"
+          fi
