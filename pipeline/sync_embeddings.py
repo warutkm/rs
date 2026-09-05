@@ -80,20 +80,36 @@ def load_embeddings_and_metadata(
 ) -> Tuple[np.ndarray, List[str], Dict[str, Dict[str, Any]]]:
     """
     Load precomputed embeddings, item ID list, and metadata lookup table.
+    Supports both .npy + meta_item_ids.json and consolidated product_vecs.npz.
     """
-    if not os.path.exists(embeds_path):
-        raise FileNotFoundError(f"Embeddings file not found at: {embeds_path}")
-    if not os.path.exists(item_ids_path):
-        raise FileNotFoundError(f"Item IDs file not found at: {item_ids_path}")
+    npz_candidate = os.path.join(os.path.dirname(embeds_path), "product_vecs.npz")
 
-    print(f"[1/4] Loading precomputed embeddings from {embeds_path} ...")
-    embeds = np.load(embeds_path)
-    if embeds.ndim == 1:
-        embeds = np.expand_dims(embeds, axis=0)
+    if os.path.exists(embeds_path) and os.path.exists(item_ids_path):
+        print(f"[1/4] Loading precomputed embeddings from {embeds_path} ...")
+        embeds = np.load(embeds_path)
+        if embeds.ndim == 1:
+            embeds = np.expand_dims(embeds, axis=0)
 
-    print(f"[2/4] Loading item IDs from {item_ids_path} ...")
-    with open(item_ids_path, "r", encoding="utf-8") as f:
-        item_ids = json.load(f)
+        print(f"[2/4] Loading item IDs from {item_ids_path} ...")
+        with open(item_ids_path, "r", encoding="utf-8") as f:
+            item_ids = json.load(f)
+    elif os.path.exists(npz_candidate):
+        print(f"[1/4] Loading consolidated product embeddings from {npz_candidate} ...")
+        npz_data = np.load(npz_candidate, allow_pickle=True)
+        embeds = npz_data["vecs"]
+        item_ids = [str(k) for k in npz_data["keys"]]
+        print(f"[2/4] Loaded {len(item_ids):,} product vectors from {npz_candidate} ...")
+    elif embeds_path.endswith(".npz") and os.path.exists(embeds_path):
+        print(f"[1/4] Loading product embeddings from {embeds_path} ...")
+        npz_data = np.load(embeds_path, allow_pickle=True)
+        embeds = npz_data["vecs"]
+        item_ids = [str(k) for k in npz_data["keys"]]
+        print(f"[2/4] Loaded {len(item_ids):,} product vectors from {embeds_path} ...")
+    else:
+        raise FileNotFoundError(
+            f"Embeddings file not found at: {embeds_path} (or {npz_candidate}). "
+            "Please ensure product embeddings exist."
+        )
 
     if len(embeds) != len(item_ids):
         raise ValueError(f"Dimension mismatch: {len(embeds)} embedding vectors vs {len(item_ids)} item IDs.")

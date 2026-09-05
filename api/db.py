@@ -74,6 +74,11 @@ def _parse_and_clean_dsn(raw_dsn: str) -> tuple[str, Optional[Any]]:
         elif ssl_val in ("false", "0", "disable"):
             ssl_setting = False
 
+    # Strip libpq-only parameters that asyncpg does not accept in query strings
+    qs.pop("channel_binding", None)
+    qs.pop("gssencmode", None)
+    qs.pop("target_session_attrs", None)
+
     # Auto-detect cloud providers that enforce SSL (Neon, Supabase, AWS RDS, Render)
     if ssl_setting is None and parsed.hostname:
         host_lower = parsed.hostname.lower()

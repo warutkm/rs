@@ -25,101 +25,101 @@ stages:
       size: 638907976
     - path: src/02_preprocessing.py
       hash: md5
-      md5: 971012b714db7b32aa58f2f911b74ee0
-      size: 7236
+      md5: 2f594ed15156b9f737a6d921fd29eb03
+      size: 7480
     outs:
     - path: data/clean_merge_df.parquet
       hash: md5
-      md5: d55492f53aa02be500089fb43efd5ba8
-      size: 444822529
+      md5: 47462a56dceaf3a13b88b1c31a4879f7
+      size: 444822681
   summarize:
     cmd: python src/03_b_t5_summarization.py
     deps:
     - path: data/clean_merge_df.parquet
       hash: md5
-      md5: d55492f53aa02be500089fb43efd5ba8
-      size: 444822529
+      md5: 47462a56dceaf3a13b88b1c31a4879f7
+      size: 444822681
     - path: src/03_b_t5_summarization.py
       hash: md5
-      md5: eeb99b19ab49f7905c522deccb2c49ad
-      size: 7721
+      md5: f4490d86890128d59fd258e44a06403b
+      size: 6665
     outs:
     - path: outputs/final_top500_product_summary.csv
       hash: md5
-      md5: cba7fabb7ebe85b171b5cdb1dc764873
-      size: 193466
+      md5: 5bbe80462940b26e45fbd8d3991e99a0
+      size: 170427
   apriori:
     cmd: python src/04_apriori_recommender.py
     deps:
     - path: data/clean_merge_df.parquet
       hash: md5
-      md5: d55492f53aa02be500089fb43efd5ba8
-      size: 444822529
+      md5: 47462a56dceaf3a13b88b1c31a4879f7
+      size: 444822681
     - path: src/04_apriori_recommender.py
       hash: md5
-      md5: 543b200df23a950bd38c3004e752802d
-      size: 13407
+      md5: 54d22fbeeebc268332e492c57b6c5ed3
+      size: 14456
     outs:
     - path: models/apriori_recommender.pkl
       hash: md5
-      md5: f5927d3a932b967520765714a61394db
-      size: 3982224
+      md5: a9259af095965939cdda9e7a5f2c9810
+      size: 3983319
     - path: outputs/apriori_rules.csv
       hash: md5
-      md5: 1293c7f437ebe1bb104c78df001db2ad
+      md5: 73704d50f27b6937aededfc9272ccb5a
       size: 344050
   content_cf:
     cmd: python src/05_content_cf_recommender.py
     deps:
     - path: data/clean_merge_df.parquet
       hash: md5
-      md5: d55492f53aa02be500089fb43efd5ba8
-      size: 444822529
+      md5: 47462a56dceaf3a13b88b1c31a4879f7
+      size: 444822681
     - path: src/05_content_cf_recommender.py
       hash: md5
-      md5: c8587c66c5c80a52980d46d8f15bc5ad
-      size: 18374
+      md5: 384d24cabf7688db0c4e4c0d81baa01e
+      size: 18429
     outs:
     - path: models/cf_recommender.pkl
       hash: md5
-      md5: e877147299d99912cfdfacbe4d590f79
-      size: 24854170
+      md5: ac2cd704657a3063314dec04b1dbc868
+      size: 24854171
     - path: models/product_recommender.pkl
       hash: md5
-      md5: 87934379324eb4d46673558f52c92fa4
-      size: 5273575
+      md5: 37ba2a369d870a87e79e5f3e2b1bca4c
+      size: 5273574
   mf_ncf:
     cmd: python src/06_mf_ncf_pytorch.py
     deps:
     - path: data/clean_merge_df.parquet
       hash: md5
-      md5: d55492f53aa02be500089fb43efd5ba8
-      size: 444822529
+      md5: 47462a56dceaf3a13b88b1c31a4879f7
+      size: 444822681
     - path: src/06_mf_ncf_pytorch.py
       hash: md5
-      md5: 835d5d4caeae2202e19acda38d207615
-      size: 13823
+      md5: 0ad4391042362f21638b39c1ba4f130f
+      size: 13901
     outs:
     - path: data/test_df.parquet
       hash: md5
-      md5: 04495729d7ecf963ddcc1895e64777b0
-      size: 725485
+      md5: b528ee23cce8cb45b3d6c1aeb3c85b23
+      size: 726439
     - path: data/train_df.parquet
       hash: md5
-      md5: 17ef9c0b3955725ad543b380a1c8a983
-      size: 2963352
+      md5: 8a85749094edb8d394fdf03ac17e4e9a
+      size: 2966272
     - path: models/metrics.json
       hash: md5
-      md5: bb68de27fc6d3054d55e1aefc3042456
-      size: 287
+      md5: b834a0cc549787f35efc2abbd7507546
+      size: 288
     - path: models/mf_model.pth
       hash: md5
-      md5: 3c056720f7b1dac0afa8a403a14093cf
-      size: 14788312
+      md5: 8cee46c550689682ac66d5e5daaa9941
+      size: 14788711
     - path: models/ncf_model.pth
       hash: md5
-      md5: 4cdfcc3997df7c534cf84b5d2e21aafc
-      size: 29163156
+      md5: a3fabfd799e8ccd63b2d7ef8a7f0db93
+      size: 29163493
   embed:
     cmd: python src/07_semantic_search.py
     deps:
@@ -252,3 +252,23 @@ stages:
       hash: md5
       md5: 9a93c1d38812b42183dd264817fe79c3
       size: 317275465
+  sentiment:
+    cmd: python src/03_sentiment_nlp.py
+    deps:
+    - path: data/clean_merge_df.parquet
+      hash: md5
+      md5: 47462a56dceaf3a13b88b1c31a4879f7
+      size: 444822681
+    - path: src/03_sentiment_nlp.py
+      hash: md5
+      md5: 31c719aa91a77f501aeae161c5384ec9
+      size: 10216
+    outs:
+    - path: models/svm_model.pkl
+      hash: md5
+      md5: 6fe23968b7990e26c73f71c6d17e6cb2
+      size: 360659
+    - path: models/svm_vectorizer.pkl
+      hash: md5
+      md5: 4c744acf03da7563f03d4ef939ad71e9
+      size: 572973

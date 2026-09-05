@@ -330,13 +330,13 @@ def check_llm(
         rewrite_res = layer.rewrite_query("wireless noise cancelling headphones under 50 dollars")
         elapsed_ms = (time.perf_counter() - start_t) * 1000.0
 
-        if rewrite_res and "rewritten_query" in rewrite_res:
+        if rewrite_res and getattr(rewrite_res, "rewritten_query", None):
             return {
                 "service": "Gemini LLM Layer",
                 "host": f"Google AI API ({target_model})",
                 "status": "PASS",
                 "latency_ms": round(elapsed_ms, 2),
-                "message": f"Prompt & query rewrite operational: '{rewrite_res.get('rewritten_query')}'.",
+                "message": f"Prompt & query rewrite operational: '{rewrite_res.rewritten_query}' (source={rewrite_res.source}).",
             }
         else:
             return {
