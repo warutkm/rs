@@ -581,10 +581,13 @@ class TwoTowerRetriever:
         self.idx_to_item: Dict[int, str] = {v: k for k, v in self.item_map.items()}
 
         # Resolve embedding paths with fallback to embeddings_cache if needed
-        if not os.path.exists(meta_item_ids_path) and os.path.exists(os.path.join("embeddings_cache", os.path.basename(meta_item_ids_path))):
-            meta_item_ids_path = os.path.join("embeddings_cache", os.path.basename(meta_item_ids_path))
-        if not os.path.exists(meta_embeds_path) and os.path.exists(os.path.join("embeddings_cache", os.path.basename(meta_embeds_path))):
-            meta_embeds_path = os.path.join("embeddings_cache", os.path.basename(meta_embeds_path))
+        cache_ids_path = os.path.join("embeddings_cache", os.path.basename(meta_item_ids_path))
+        if not os.path.exists(meta_item_ids_path) and os.path.exists(cache_ids_path):
+            meta_item_ids_path = cache_ids_path
+
+        cache_embeds_path = os.path.join("embeddings_cache", os.path.basename(meta_embeds_path))
+        if not os.path.exists(meta_embeds_path) and os.path.exists(cache_embeds_path):
+            meta_embeds_path = cache_embeds_path
 
         with open(meta_item_ids_path, "r", encoding="utf-8") as f:
             self.meta_items: List[str] = json.load(f)
