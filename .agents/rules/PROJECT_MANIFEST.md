@@ -3,10 +3,10 @@
 ## Structural Overview
 ```
 amazon_project/
-├── GEMINI.md                          # Durable project rules & conventions
-├── PROJECT_MANIFEST.md                # Structural directory tree & manifest (this file)
-├── RECSYS_V2_WORKFLOW_AND_DESIGN.md   # v2 Master design & workflow document
-├── AI_BUILD_PROMPT.md                 # Per-phase build prompt templates
+├── .agents/                           # Antigravity tooling & durable rules
+│   └── rules/
+│       ├── GEMINI.md                  # Project rules & hard conventions
+│       └── PROJECT_MANIFEST.md        # Structural directory tree & manifest (this file)
 ├── config.py                          # Global paths, hyperparameters, constants
 ├── requirements.txt                   # Pinned project dependencies
 ├── pyproject.toml                     # Black formatting, pytest, and tool configuration
@@ -15,14 +15,22 @@ amazon_project/
 ├── .env.tier0.example                 # Tier 0 local Docker Compose environment template
 ├── .env.tier1.example                 # Tier 1 free-tier cloud deployment environment template
 ├── docker-compose.yml                 # Local multi-service Tier 0 stack (api, web, postgres, redis, qdrant)
-├── render.yaml                        # (Phase 11) Render Blueprint specification for FastAPI web service
-├── vercel.json                        # (Phase 11) Vercel configuration for Next.js 14 frontend
+├── render.yaml                        # Render Blueprint specification for FastAPI web service
+├── vercel.json                        # Vercel configuration for Next.js 14 frontend
 ├── .dockerignore                      # Build ignore for root Docker context
 ├── dvc.yaml                           # DVC pipeline DAG definition
 ├── dvc.lock                           # DVC lockfile
 │
-├── docs/                              # Deployment & operational runbooks
-│   └── DEPLOYMENT_TIER1.md            # (Phase 11) Tier 1 Free Cloud Deployment runbook & guide
+├── docs/                              # Project documentation & runbooks
+│   ├── ARCHITECTURE.md                # v2 Master architecture, system design & decision log
+│   ├── DEPLOYMENT_TIER1.md            # Tier 1 Free Cloud Deployment runbook & guide
+│   ├── dev-process/                   # Engineering audit, research & prompt artifacts
+│   │   ├── AI_BUILD_PROMPT.md         # Phased build prompt templates
+│   │   ├── audit_report.md            # Codebase audit findings & blocker fixes
+│   │   ├── research_findings.md       # Architecture & vendor evaluation notes
+│   │   └── CLAUDE.md                  # Multi-tool agent session reference
+│   └── reference/                     # Archival & historical materials
+│       └── Amazon_Project_Workflow.pdf# Original v1 architecture deck & diagram
 │
 ├── scripts/                           # Operational and pre-flight tools
 │   └── verify_tier1_connectivity.py   # (Phase 11) Pre-flight cloud connectivity & latency test tool

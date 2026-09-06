@@ -81,17 +81,9 @@ Thumbs.db
 dvc_storage/
 
 # =========================
-# MLFLOW DB
 # =========================
-mlflow.db
-
+# LEGACY ARTIFACTS
 # =========================
-# SCRATCH & LEGACY ARTIFACTS
-# =========================
-audit_report.md
-research_findings.md
-CLAUDE.md
-dvc_embed_stage.sh
 api/docker-compose.yml
 
 # =========================
