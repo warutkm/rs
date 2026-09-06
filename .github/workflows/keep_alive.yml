@@ -14,10 +14,12 @@ jobs:
       - name: Ping FastAPI Health Endpoint
         run: |
           echo "Sending heartbeat to Render..."
-          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 45 "https://amazon-recsys-api.onrender.com/v2/health")
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 "https://amazon-recsys-api.onrender.com/v2/health" || echo "000")
           echo "Render HTTP Status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
             echo "Render service is awake and healthy!"
+          elif [ "$HTTP_STATUS" = "000" ]; then
+            echo "Render backend is waking up from cold start (timeout/spin-up). Heartbeat registered."
           else
             echo "Service may be waking up (Status: $HTTP_STATUS)"
           fi

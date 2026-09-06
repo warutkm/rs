@@ -72,8 +72,8 @@ amazon_project/
 │
 ├── .github/workflows/                 # CI/CD & automation workflows
 │   ├── ci.yml                         # (Phase 9) Full CI pipeline (lint, test, smoke-retrain, build, deploy-on-tag)
-│   ├── scheduled_retrain.yml          # (Phase 9) Cron & dispatch scheduled dvc repro pipeline
-│   └── retrain.yml                    # (Phase 2) Cron scheduled dvc repro pipeline
+│   ├── retrain.yml                    # (Phase 2) Scheduled weekly dvc repro retraining & validation
+│   └── keep_alive.yml                 # (Phase 11) Render backend keep-alive heartbeat ping
 │
 ├── web/                               # (Phase 8/10/11) Next.js 14 frontend application
 │   ├── Dockerfile                     # Multi-stage production container for Next.js 14 runner

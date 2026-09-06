@@ -104,21 +104,21 @@ def test_ci_workflow_jobs_and_steps():
     assert any("docker" in name.lower() or "container" in name.lower() for name in deploy_steps)
 
 
-def test_scheduled_retrain_workflow_configured():
-    """Verify scheduled_retrain.yml exists, is valid YAML, and has cron schedule."""
-    assert os.path.exists(SCHEDULED_RETRAIN_PATH), f"scheduled_retrain.yml missing at {SCHEDULED_RETRAIN_PATH}"
+def test_retrain_workflow_configured():
+    """Verify retrain.yml exists, is valid YAML, and has cron schedule."""
+    assert os.path.exists(RETRAIN_PATH), f"retrain.yml missing at {RETRAIN_PATH}"
 
-    with open(SCHEDULED_RETRAIN_PATH, "r", encoding="utf-8") as f:
+    with open(RETRAIN_PATH, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     triggers = data.get("on") or data.get(True)
-    assert "schedule" in triggers, "scheduled_retrain.yml must have a schedule trigger."
+    assert "schedule" in triggers, "retrain.yml must have a schedule trigger."
     cron_list = triggers["schedule"]
     assert len(cron_list) > 0 and "cron" in cron_list[0]
     cron_expr = cron_list[0]["cron"]
     assert len(cron_expr.split()) == 5, f"Cron expression '{cron_expr}' must have 5 fields."
 
-    assert "workflow_dispatch" in triggers, "scheduled_retrain.yml must have workflow_dispatch."
+    assert "workflow_dispatch" in triggers, "retrain.yml must have workflow_dispatch."
 
     jobs = data["jobs"]
-    assert "retrain" in jobs, "scheduled_retrain.yml must define a 'retrain' job."
+    assert "retrain" in jobs, "retrain.yml must define a 'retrain' job."

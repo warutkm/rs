@@ -238,7 +238,7 @@ To keep it warm:
 
 ### 8.2 Prevent Qdrant Cloud Inactivity Suspension
 Qdrant Cloud free clusters automatically suspend after 7 days without queries.
-- The repository includes `.github/workflows/scheduled_retrain.yml` which pings and syncs embeddings weekly, ensuring the cluster stays active continuously.
+- The repository includes `.github/workflows/retrain.yml` which pings and syncs embeddings weekly, ensuring the cluster stays active continuously.
 
 ---
 

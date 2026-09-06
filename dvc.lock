@@ -77,12 +77,12 @@ stages:
       size: 444822681
     - path: src/05_content_cf_recommender.py
       hash: md5
-      md5: 384d24cabf7688db0c4e4c0d81baa01e
-      size: 18429
+      md5: 692cf2f8443b87804792ba6776797173
+      size: 18569
     outs:
     - path: models/cf_recommender.pkl
       hash: md5
-      md5: ac2cd704657a3063314dec04b1dbc868
+      md5: 89be990e78ffdeb9165e25c47beb6824
       size: 24854171
     - path: models/product_recommender.pkl
       hash: md5

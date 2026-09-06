@@ -314,7 +314,9 @@ def evaluate_content(
     rec:      ProductRecommender,
     k:        int = 10,
     n_users:  int = 500,
+    random_state: int = 42,
 ) -> tuple:
+    rng = np.random.default_rng(random_state)
     test_map = test_df.groupby("user_id")["item_id"].apply(set).to_dict()
     users    = list(set(train_df["user_id"]) & set(test_map))[:n_users]
 
@@ -323,7 +325,7 @@ def evaluate_content(
         train_items = train_df[train_df["user_id"] == user]["item_id"].values
         if len(train_items) == 0:
             continue
-        seed    = np.random.choice(train_items)
+        seed    = rng.choice(train_items)
         rel     = test_map[user]
         recs    = [r["item_id"] for r in rec.get_recommendations(seed, top_n=k)]
         R.append(_recall(recs, rel, k))
@@ -339,7 +341,9 @@ def evaluate_cf(
     cf_model:  CollaborativeFilteringRecommender,
     k:         int = 10,
     n_users:   int = 500,
+    random_state: int = 42,
 ) -> tuple:
+    rng = np.random.default_rng(random_state)
     test_map = test_df.groupby("user_id")["item_id"].apply(set).to_dict()
     users    = list(set(train_df["user_id"]) & set(test_map))[:n_users]
 
@@ -348,7 +352,7 @@ def evaluate_cf(
         train_items = train_df[train_df["user_id"] == user]["item_id"].values
         if len(train_items) == 0:
             continue
-        seed    = np.random.choice(train_items)
+        seed    = rng.choice(train_items)
         rel     = test_map[user]
         # recommend_products_cf now returns list[dict] — extract item_id strings
         recs    = [r["item_id"] for r in cf_model.recommend_products_cf(seed, top_k=k)]
