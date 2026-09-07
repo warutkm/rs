@@ -102,4 +102,10 @@ web/out/
 *.tar.gz
 *.zip
 *.tar
-*.gz
+*.gz
+
+# =========================
+# LOCAL DOCUMENTATION
+# =========================
+docs/interview-prep/
+
